@@ -524,7 +524,7 @@ async function handleHunt(req, res, url) {
       // 顶层标明这批结果的数据来源，避免用户误以为「仅 Steam」出来的数字是 Steam 的
       dataSource: r.dataSource || 'buff',
       dataSourceNote: r.dataSource === 'steam'
-        ? '挂单与磨损均来自 Steam（本地解码检视链接），未使用 BUFF 挂单'
+        ? '挂单、磨损与价格均来自 Steam 挂单页（价格为买家实付，含手续费）；BUFF 只用于查询磨损区间和英文名，未使用 BUFF 挂单'
         : (market === 'both'
           ? '求解用 BUFF 挂单；Steam 仅作逐笔磨损与价格比对'
           : '挂单与磨损均来自 BUFF'),
@@ -665,6 +665,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   return json(res, 404, { ok: false, error: 'not found' });
+});
+
+server.on('error', e => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`[web] 端口 ${PORT} 已被占用：服务可能已经在运行，直接打开 http://${HOST}:${PORT} 即可；`);
+    console.error('[web] 或设置环境变量 CS2_WEB_PORT 换一个端口。');
+  } else {
+    console.error(`[web] 启动失败：${e.message}`);
+  }
+  process.exit(1);
 });
 
 server.listen(PORT, HOST, () => {

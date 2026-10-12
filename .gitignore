@@ -1,0 +1,9 @@
+# 登录态（含 session token，绝不能提交）
+data/cookies*.json
+data/*credentials*.json
+
+# 运行产物
+data/last-pool.json
+out/
+
+node_modules/

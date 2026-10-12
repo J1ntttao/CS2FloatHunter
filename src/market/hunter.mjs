@@ -16,6 +16,10 @@
 import { BuffMarket } from './buff.mjs';
 import { materialsInCollection, nameFlags, normalizeName } from '../cs2up/materials.mjs';
 import { loadCookies } from '../auth/session.mjs';
+import { steamListingUrl } from './inspect.mjs';
+
+/** Steam 挂单的 eCurrency：23 = 人民币 */
+const CNY_CURRENCY_ID = 23;
 import {
   f32, normalizeWear, outputWear, requiredNormalizedSum,
   solveCombinations, ieee754Info, verifyCombination,
@@ -116,26 +120,34 @@ export class CollectionHunter {
       }
     }
 
-    const lo0 = Number(targetWear) - band;
-    const hi0 = Number(targetWear) + band;
-    const usableVariants = [];
-    const skippedRanges = [];
-    const seenRange = new Set();
+    // 只用「包含目标磨损本身」的那一个区间档。
+    // 以前是「区间与 目标±band 有交集」就收，band 大时会把相邻档（如 [0.07,0.15] 和 [0.15,0.35]）
+    // 混进同一个池子，且产物区间随手取了第一个变体的区间（如 [0,0.07]），导致求解结果完全错误。
+    const avgWear = f32(targetWear);
+    const groupMap = new Map();
     for (const v of variants) {
-      const key = `${v.range[0]}|${v.range[1]}`;
-      const covers = Math.min(v.range[1], hi0) > Math.max(v.range[0], lo0);
-      if (!covers) { if (!seenRange.has(key)) { seenRange.add(key); skippedRanges.push(v.range); } continue; }
-      usableVariants.push(v);
+      const k = `${v.range[0]}|${v.range[1]}`;
+      if (!groupMap.has(k)) groupMap.set(k, { range: v.range, items: [] });
+      groupMap.get(k).items.push(v);
     }
-    if (!usableVariants.length) {
+    const groups = [...groupMap.values()];
+    const hit = groups
+      .filter(g => g.range[0] <= avgWear && avgWear <= g.range[1])
+      .sort((a, b) => b.items.length - a.items.length)[0];
+    const skippedRanges = groups.filter(g => g !== hit).map(g => g.range);
+    if (!hit) {
       return {
         ok: false, error: 'no_usable_range',
-        message: `没有任何皮肤的磨损区间能覆盖 ${targetWear}（±${band}）。`,
+        message: `该收藏品这一档没有任何磨损区间包含 ${targetWear}。` +
+          `可用区间只有 ${groups.map(g => `[${g.range[0]},${g.range[1]}]`).join('、')}。`,
         skippedRanges,
       };
     }
-    const outRange = usableVariants[0].range;
-    onProgress(`可用皮肤 ${usableVariants.length} 个，磨损区间 [${outRange[0]}, ${outRange[1]}]`);
+    const outRange = hit.range;
+    const lo = Math.max(outRange[0], avgWear - band);
+    const hi = Math.min(outRange[1], avgWear + band);
+    const usableVariants = hit.items;
+    onProgress(`可用皮肤 ${usableVariants.length} 个，磨损区间 [${outRange[0]}, ${outRange[1]}]，只收磨损在 [${lo.toFixed(4)}, ${hi.toFixed(4)}] 的挂单`);
 
     // 3) 转成 Steam 需要的标识：**必须用 market_hash_name（英文名）**，
     //    不能用中文名 —— 用中文名拼 /market/listings/730/<中文> 会拿到不含挂单数据的空壳
@@ -173,21 +185,31 @@ export class CollectionHunter {
         continue;
       }
       const withFloat = r.listings.filter(l => l.floatvalue != null);
-      perItem.push({ name: t.name, ok: true, total: r.listings.length, withFloat: withFloat.length, pagesFetched: r.pagesFetched });
-      onProgress(`  ${t.name} → ${r.listings.length} 笔挂单，${withFloat.length} 笔解出磨损`);
+      // 价格只认人民币挂单（currency 23）；其它币种的数值不能直接当 ¥ 加总
+      const nonCny = withFloat.filter(l => l.currencyId != null && l.currencyId !== CNY_CURRENCY_ID).length;
+      let inBand = 0;
       for (const l of withFloat) {
-        if (l.floatvalue < t.range[0] || l.floatvalue > t.range[1]) continue;
+        if (l.floatvalue < lo || l.floatvalue > hi) continue;
+        if (l.currencyId != null && l.currencyId !== CNY_CURRENCY_ID) continue;
+        inBand++;
+        const buyUrl = steamListingUrl(t.marketHashName, l.listingId);
         pool.push({
           ...l,
+          raw: undefined,
+          name: t.name,
+          marketHashName: t.marketHashName,
           matRange: t.range,
           dbName: t.dbName,
           norm: normalizeWear(l.floatvalue, t.range[0], t.range[1]),
           paintwear: l.floatvalue,
           market: 'steam',
-          url: l.url,
-          buyUrl: l.url,
+          url: buyUrl,
+          buyUrl,
         });
       }
+      perItem.push({ name: t.name, ok: true, total: r.listings.length, withFloat: withFloat.length, inBand, nonCny, pagesFetched: r.pagesFetched });
+      onProgress(`  ${t.name} → ${r.listings.length} 笔挂单，${withFloat.length} 笔解出磨损，${inBand} 笔落在磨损带内` +
+        (nonCny ? `（另有 ${nonCny} 笔非人民币挂单已排除）` : ''));
     }
 
     const steamOk = perItem.filter(x => x.ok).length;
@@ -242,10 +264,13 @@ export class CollectionHunter {
           listingId: p.listingId,
           assetId: p.assetId,
           name: p.name,
+          marketHashName: p.marketHashName,
           paintwear: p.paintwear,
+          paintseed: p.paintseed,
           matRange: p.matRange,
           norm: p.norm,
           price: p.price,
+          priceText: p.priceText,
           url: p.url,
           buyUrl: p.buyUrl,
           inspectUrl: null,
@@ -258,7 +283,9 @@ export class CollectionHunter {
       dataSource: 'steam',
       collectionName, materialGrade,
       outRange, skippedRanges,
-      band: [lo0, hi0],
+      requiredAvgWear: avgWear,
+      usableRanges: [outRange],
+      band: [lo, hi],
       poolSize: pool.length,
       materialCount: variants.length,
       steamItems: { total: targets.length, ok: steamOk, perItem },

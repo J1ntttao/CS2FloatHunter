@@ -193,7 +193,7 @@
 
   <footer>
     计算引擎：<b>西林磨损计算器</b>（68688888.github.io）的官方算法，已与其源码逐位对齐。<br>
-    收藏品/材料清单来自配方链接 + 本地材料库；挂单与精确磨损来自 BUFF163。挂单随时可能被买走，请尽快下单。
+    收藏品/材料清单来自配方链接 + 本地材料库；<span id="srcNote">挂单与精确磨损来自 BUFF163</span>。挂单随时可能被买走，请尽快下单。
   </footer>
 </div>
 
@@ -223,7 +223,7 @@ function renderLocated(d) {
     <div class="panel">
       <h2>已定位</h2>
       <div class="kpis" style="margin-bottom:12px">
-        <div class="kv"><span>数据来源</span><strong>${d.recipes[0] && d.recipes[0].dataSource === 'steam' ? 'Steam（挂单+磨损都来自 Steam）' : 'BUFF'}</strong></div>
+        <div class="kv"><span>检索范围</span><strong>${MARKET === 'steam' ? '仅 Steam' : MARKET === 'both' ? 'BUFF + Steam 比价' : '仅 BUFF'}</strong></div>
         <div class="kv"><span>收藏品</span><strong>${esc(d.collection)}</strong></div>
         <div class="kv"><span>材料档位</span><strong>${esc(d.grade || '-')}</strong></div>
         <div class="kv"><span>该档皮肤数</span><strong>${d.materialCount}</strong></div>
@@ -239,7 +239,25 @@ function recipeCard(r, idx) {
   const badge = r.exact
     ? '<span class="badge exact">★ 精确命中</span>'
     : `<span class="badge near">误差 ${r.score.toExponential(2)}</span>`;
+  const fromSteam = r.dataSource === 'steam';
   const rows = r.materials.map((m, i) => {
+    const nameCell = `<td><b>${esc(m.name || m.marketHashName || '（未知皮肤）')}</b>
+      ${fromSteam && m.marketHashName && m.marketHashName !== m.name ? `<div style="color:var(--dim);font-size:11px">${esc(m.marketHashName)}</div>` : ''}
+      <div style="color:var(--dim);font-size:11.5px">区间 [${m.matRange ? m.matRange.join(', ') : '-'}]</div></td>`;
+
+    // 「仅 Steam」：价格、磨损、购买链接都来自同一笔 Steam 挂单，不显示 BUFF / 比价列
+    if (fromSteam) {
+      return `<tr>
+        <td class="mono" style="color:var(--dim)">${i + 1}</td>
+        ${nameCell}
+        <td class="mono">${wear(m.paintwear)}${m.paintseed != null ? `<div style="color:var(--dim);font-size:11px">图案模板 ${esc(m.paintseed)}</div>` : ''}</td>
+        <td class="price">${money(m.price)}
+          ${m.url ? `<div><a class="steam" href="${esc(m.url)}" target="_blank" rel="noopener">Steam 购买这一笔</a></div>` : ''}
+          ${m.listingId ? `<div style="color:var(--dim);font-size:11px">挂单 ${esc(m.listingId)}</div>` : ''}
+        </td>
+      </tr>`;
+    }
+
     const s = m.steam;
     let steamCell = '<span style="color:var(--dim)">未查询</span>';
     if (s && s.ok) {
@@ -269,7 +287,7 @@ function recipeCard(r, idx) {
       ? `<div style="color:var(--dim);font-size:11px">挂单 ¥${m.priceMin}~${m.priceMax}（${m.candidatesOnMarket} 笔）</div>` : '';
     return `<tr>
       <td class="mono" style="color:var(--dim)">${i + 1}</td>
-      <td><b>${esc(m.name)}</b><div style="color:var(--dim);font-size:11.5px">区间 [${m.matRange ? m.matRange.join(', ') : '-'}]</div></td>
+      ${nameCell}
       <td class="mono">${wear(m.paintwear)}</td>
       <td class="price">${money(m.price)}${cmin}
         ${m.url ? `<div><a class="buy" href="${esc(m.url)}" target="_blank" rel="noopener">BUFF 购买</a></div>` : ''}
@@ -299,7 +317,9 @@ function recipeCard(r, idx) {
     ${optNote ? `<div style="padding:8px 15px;background:#0f1a14;font-size:12px;border-bottom:1px solid var(--line)">${optNote}</div>` : ''}
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>#</th><th>材料</th><th>所需磨损 (float32)</th><th>BUFF 价格 / 购买</th><th>Steam 最低价</th><th>Steam 逐笔磨损 / 购买</th></tr></thead>
+        <thead><tr>${fromSteam
+          ? '<th>#</th><th>材料</th><th>Steam 挂单磨损 (float)</th><th>Steam 价格（含手续费）/ 购买</th>'
+          : '<th>#</th><th>材料</th><th>所需磨损 (float32)</th><th>BUFF 价格 / 购买</th><th>Steam 最低价</th><th>Steam 逐笔磨损 / 购买</th>'}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -310,6 +330,9 @@ function recipeCard(r, idx) {
 }
 
 function renderResult(d) {
+  $('srcNote').textContent = d.dataSource === 'steam'
+    ? '挂单、精确磨损与价格来自 Steam 社区市场（磨损区间参考 BUFF）'
+    : '挂单与精确磨损来自 BUFF163';
   const ie = d.ieee754 || {};
   const ieBox = ie.exact
     ? `<div class="good-box">你输入的磨损在 IEEE754 单精度下<b>可精确表示</b>。</div>`

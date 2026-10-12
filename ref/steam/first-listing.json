@@ -1,0 +1,132 @@
+{
+  "listingid": "533271044760975646",
+  "unPrice": 41,
+  "unFee": 14,
+  "publisherFeeApp": 730,
+  "publisherFeePct": 0.10000000149011612,
+  "eCurrency": 23,
+  "strSubtotal": "¥0.55",
+  "enhanced_appearances": [
+    {
+      "mime_type": "image/avif",
+      "url": "https://shared.cdn.queniuqe.com/market_listings/ea/730/533271044760975646/0_3410578716460493363.avif"
+    },
+    {
+      "mime_type": "image/avif",
+      "url": "https://shared.cdn.queniuqe.com/market_listings/ea/730/533271044760975646/1_4152005200323085868.avif"
+    },
+    {
+      "mime_type": "image/avif",
+      "url": "https://shared.cdn.queniuqe.com/market_listings/ea/730/533271044760975646/2_1883245415229706716.avif"
+    },
+    {
+      "mime_type": "image/avif",
+      "url": "https://shared.cdn.queniuqe.com/market_listings/ea/730/533271044760975646/3_2996927138531435908.avif"
+    }
+  ],
+  "description": {
+    "appid": 730,
+    "classid": "7993038670",
+    "instanceid": "188530139",
+    "currency": false,
+    "background_color": "393b3e",
+    "icon_url": "i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwi5Hf9Ttk6-egbZt5MvGDMWqVxedjva8-F3-wkE915G7dytn6JXuRPwN1CMN3QuID5kGwx4XmMO3q5AbciNpD02yg2YvxHjas",
+    "icon_url_large": "",
+    "descriptions": [
+      {
+        "type": "html",
+        "value": "外观： 久经沙场",
+        "name": "exterior_wear"
+      },
+      {
+        "type": "html",
+        "value": " ",
+        "name": "blank"
+      },
+      {
+        "type": "html",
+        "value": "强大且精准，AUG 瞄准型突击步枪以其低扩散和高射速来弥补换弹时间久的缺陷。 这把武器采用蛇和两栖动物的图案进行了自定义涂装。\n\n<i>恶意行径</i>",
+        "name": "description"
+      },
+      {
+        "type": "html",
+        "value": " ",
+        "name": "blank"
+      },
+      {
+        "type": "html",
+        "value": "阿努比斯收藏品",
+        "color": "9da1a9",
+        "name": "itemset_name"
+      },
+      {
+        "type": "html",
+        "value": " ",
+        "name": "blank"
+      }
+    ],
+    "tradable": true,
+    "actions": [
+      {
+        "link": "steam://run/730//+csgo_econ_action_preview%20%propid:6%",
+        "name": "在游戏中检视…"
+      }
+    ],
+    "owner_descriptions": [],
+    "owner_actions": [],
+    "fraudwarnings": [],
+    "name": "AUG | 蛇窟",
+    "name_color": "b0c3d9",
+    "type": "消费级 步枪",
+    "market_name": "AUG | 蛇窟 (久经沙场)",
+    "market_hash_name": "AUG | Snake Pit (Field-Tested)",
+    "market_actions": [
+      {
+        "link": "steam://run/730//+csgo_econ_action_preview%20%propid:6%",
+        "name": "在游戏中检视…"
+      }
+    ],
+    "commodity": false,
+    "market_tradable_restriction": 7,
+    "market_marketable_restriction": 7,
+    "marketable": true,
+    "tags": [],
+    "sealed": false,
+    "market_bucket_group_name": "AUG | 蛇窟",
+    "market_bucket_group_id": "G180820E1093004",
+    "sealed_type": 0,
+    "market_name_inside_group": "久经沙场",
+    "market_bucket_id": "180820E109300438A4E1F5F503"
+  },
+  "bMine": false,
+  "unSteamFee": 7,
+  "unPublisherFee": 7,
+  "unPricePerUnit": 41,
+  "unFeePerUnit": 14,
+  "unSteamFeePerUnit": 7,
+  "unPublisherFeePerUnit": 7,
+  "asset": {
+    "id": "53834539037",
+    "assetid": "53834539037",
+    "instanceid": "188530139",
+    "classid": "7993038670",
+    "amount": 1,
+    "appid": 730,
+    "contextid": "2",
+    "asset_properties": [
+      {
+        "propertyid": 1,
+        "int_value": "438"
+      },
+      {
+        "propertyid": 2,
+        "float_value": 0.18269971013069153
+      },
+      {
+        "propertyid": 6,
+        "string_value": "7E6EE3BED9B8B67F66765E9F77567F4E7A46DCD5928F7D3EC87D16770E76FBC1E4DE"
+      }
+    ],
+    "asset_accessories": []
+  }
+}

@@ -1,0 +1,550 @@
+{
+  "generatedAt": "2026-10-12T07:19:08.299Z",
+  "engine": "68688888.github.io 西林磨损计算器（算法已逐位对齐，见 tests/test-vs-site.mjs）",
+  "request": {
+    "target": 0.1512345,
+    "outMin": 0.1,
+    "outMax": 0.7,
+    "rarity": "classified",
+    "count": 10,
+    "band": 0.06,
+    "market": "buff",
+    "mix": true,
+    "maxCollections": 4
+  },
+  "ieee754": {
+    "input": 0.1512345,
+    "asFloat32": 0.1512344926595688,
+    "delta": 7.340431207314424e-9,
+    "exact": false,
+    "spacing": 1.4901161193847656e-8,
+    "nearestBelow": 0.1512344777584076,
+    "nearestAbove": 0.15123450756072998
+  },
+  "requiredAvgWear": 0.0853908360004425,
+  "requiredNormalizedSum": 0.853908360004425,
+  "poolSize": 450,
+  "normalizedPoolSize": 450,
+  "mixPoolSize": 450,
+  "exactFound": true,
+  "recipes": [
+    {
+      "score": 0,
+      "exact": true,
+      "outputWear": 0.15123450756072998,
+      "cost": 9940.839999999998,
+      "mixCount": 4,
+      "outputs": [
+        {
+          "collection": "set_train_2021",
+          "collectionName": "2021 列车停放站收藏品",
+          "count": 5,
+          "probability": 0.5,
+          "wear": 0.15123450756072998
+        },
+        {
+          "collection": "set_community_36",
+          "collectionName": "创世纪收藏品",
+          "count": 3,
+          "probability": 0.3,
+          "wear": 0.15123450756072998
+        },
+        {
+          "collection": "set_xpshop_wpn_01",
+          "collectionName": "限定物品",
+          "count": 1,
+          "probability": 0.1,
+          "wear": 0.15123450756072998
+        },
+        {
+          "collection": "set_community_26",
+          "collectionName": "裂空收藏品",
+          "count": 1,
+          "probability": 0.1,
+          "wear": 0.15123450756072998
+        }
+      ],
+      "materials": [
+        {
+          "market": "buff",
+          "goodsId": 1118771,
+          "orderId": "3946794796-AB89-139309412",
+          "assetId": "47833432053",
+          "name": "M4A1消音版 | 幽独 (略有磨损)",
+          "paintwear": 0.07007480412721634,
+          "paintwearRaw": "0.07007480412721634",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.0009350478067062795,
+          "collection": "set_xpshop_wpn_01",
+          "collectionName": "限定物品",
+          "price": 199,
+          "priceText": "¥199",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/1118771",
+          "buyUrl": "https://buff.163.com/goods/1118771#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=47833432053"
+        },
+        {
+          "market": "buff",
+          "goodsId": 871443,
+          "orderId": "4175450274-B856-139312153",
+          "assetId": "54005359878",
+          "name": "USP消音版 | 银装素裹 (略有磨损)",
+          "paintwear": 0.07045982778072357,
+          "paintwearRaw": "0.07045982778072357",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.0057478430680930614,
+          "collection": "set_train_2021",
+          "collectionName": "2021 列车停放站收藏品",
+          "price": 1800,
+          "priceText": "¥1800",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/871443",
+          "buyUrl": "https://buff.163.com/goods/871443#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=54005359878"
+        },
+        {
+          "market": "buff",
+          "goodsId": 871443,
+          "orderId": "3813159296-A3FE-139217393",
+          "assetId": "40212228092",
+          "name": "USP消音版 | 银装素裹 (略有磨损)",
+          "paintwear": 0.07138391584157944,
+          "paintwearRaw": "0.07138391584157944",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.017298942431807518,
+          "collection": "set_train_2021",
+          "collectionName": "2021 列车停放站收藏品",
+          "price": 2600,
+          "priceText": "¥2600",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/871443",
+          "buyUrl": "https://buff.163.com/goods/871443#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=40212228092"
+        },
+        {
+          "market": "buff",
+          "goodsId": 871443,
+          "orderId": "4170570108-B823-139312590",
+          "assetId": "54052223028",
+          "name": "USP消音版 | 银装素裹 (略有磨损)",
+          "paintwear": 0.07575847208499908,
+          "paintwearRaw": "0.07575847208499908",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.07198089361190796,
+          "collection": "set_train_2021",
+          "collectionName": "2021 列车停放站收藏品",
+          "price": 1500,
+          "priceText": "¥1500",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/871443",
+          "buyUrl": "https://buff.163.com/goods/871443#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=54052223028"
+        },
+        {
+          "market": "buff",
+          "goodsId": 871443,
+          "orderId": "4139229678-B601-139313132",
+          "assetId": "38224271890",
+          "name": "USP消音版 | 银装素裹 (略有磨损)",
+          "paintwear": 0.07700097560882568,
+          "paintwearRaw": "0.07700097560882568",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.08751218765974045,
+          "collection": "set_train_2021",
+          "collectionName": "2021 列车停放站收藏品",
+          "price": 2000,
+          "priceText": "¥2000",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/871443",
+          "buyUrl": "https://buff.163.com/goods/871443#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=38224271890"
+        },
+        {
+          "market": "buff",
+          "goodsId": 871443,
+          "orderId": "4118149394-B5C3-139313070",
+          "assetId": "52582784293",
+          "name": "USP消音版 | 银装素裹 (略有磨损)",
+          "paintwear": 0.0771464854478836,
+          "paintwearRaw": "0.0771464854478836",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.08933106064796448,
+          "collection": "set_train_2021",
+          "collectionName": "2021 列车停放站收藏品",
+          "price": 1000,
+          "priceText": "¥1000",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/871443",
+          "buyUrl": "https://buff.163.com/goods/871443#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=52582784293"
+        },
+        {
+          "market": "buff",
+          "goodsId": 1119983,
+          "orderId": "3870230598-A619-139218900",
+          "assetId": "47253656079",
+          "name": "格洛克 18 型 | 镜面马赛克 (略有磨损)",
+          "paintwear": 0.07044040411710739,
+          "paintwearRaw": "0.07044040411710739",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.005505047272890806,
+          "collection": "set_community_36",
+          "collectionName": "创世纪收藏品",
+          "price": 450,
+          "priceText": "¥450",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/1119983",
+          "buyUrl": "https://buff.163.com/goods/1119983#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=47253656079"
+        },
+        {
+          "market": "buff",
+          "goodsId": 1119983,
+          "orderId": "4175272119-B86B-139312134",
+          "assetId": "51098998471",
+          "name": "格洛克 18 型 | 镜面马赛克 (略有磨损)",
+          "paintwear": 0.07751317322254181,
+          "paintwearRaw": "0.07751317322254181",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.09391465783119202,
+          "collection": "set_community_36",
+          "collectionName": "创世纪收藏品",
+          "price": 139.89,
+          "priceText": "¥139.89",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/1119983",
+          "buyUrl": "https://buff.163.com/goods/1119983#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=51098998471"
+        },
+        {
+          "market": "buff",
+          "goodsId": 1119983,
+          "orderId": "4175272119-B86B-139312134",
+          "assetId": "51098998471",
+          "name": "格洛克 18 型 | 镜面马赛克 (略有磨损)",
+          "paintwear": 0.07751317322254181,
+          "paintwearRaw": "0.07751317322254181",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.09391465783119202,
+          "collection": "set_community_36",
+          "collectionName": "创世纪收藏品",
+          "price": 139.89,
+          "priceText": "¥139.89",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/1119983",
+          "buyUrl": "https://buff.163.com/goods/1119983#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=51098998471"
+        },
+        {
+          "market": "buff",
+          "goodsId": 781610,
+          "orderId": "4169462453-B832-139312189",
+          "assetId": "53975089094",
+          "name": "格洛克18型 | 摩登时代 (崭新出厂)",
+          "paintwear": 0.02714375965297222,
+          "paintwearRaw": "0.02714375965297222",
+          "matRange": [
+            0,
+            0.07
+          ],
+          "norm": 0.3877680003643036,
+          "collection": "set_community_26",
+          "collectionName": "裂空收藏品",
+          "price": 112.06,
+          "priceText": "¥112.06",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/781610",
+          "buyUrl": "https://buff.163.com/goods/781610#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=53975089094"
+        }
+      ]
+    },
+    {
+      "score": 8.940696716308594e-7,
+      "exact": false,
+      "outputWear": 0.15123538672924042,
+      "cost": 10681.19,
+      "mixCount": 4,
+      "outputs": [
+        {
+          "collection": "set_xpshop_wpn_01",
+          "collectionName": "限定物品",
+          "count": 3,
+          "probability": 0.3,
+          "wear": 0.15123538672924042
+        },
+        {
+          "collection": "set_train_2021",
+          "collectionName": "2021 列车停放站收藏品",
+          "count": 3,
+          "probability": 0.3,
+          "wear": 0.15123538672924042
+        },
+        {
+          "collection": "set_community_36",
+          "collectionName": "创世纪收藏品",
+          "count": 2,
+          "probability": 0.2,
+          "wear": 0.15123538672924042
+        },
+        {
+          "collection": "set_community_26",
+          "collectionName": "裂空收藏品",
+          "count": 2,
+          "probability": 0.2,
+          "wear": 0.15123538672924042
+        }
+      ],
+      "materials": [
+        {
+          "market": "buff",
+          "goodsId": 1118771,
+          "orderId": "4150157774-B7E8-139312523",
+          "assetId": "47809978405",
+          "name": "M4A1消音版 | 幽独 (略有磨损)",
+          "paintwear": 0.07000095397233963,
+          "paintwearRaw": "0.07000095397233963",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.000011920928045583423,
+          "collection": "set_xpshop_wpn_01",
+          "collectionName": "限定物品",
+          "price": 70,
+          "priceText": "¥70",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/1118771",
+          "buyUrl": "https://buff.163.com/goods/1118771#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=47809978405"
+        },
+        {
+          "market": "buff",
+          "goodsId": 1118771,
+          "orderId": "3885188404-A725-139218632",
+          "assetId": "47397691122",
+          "name": "M4A1消音版 | 幽独 (略有磨损)",
+          "paintwear": 0.07000215351581573,
+          "paintwearRaw": "0.07000215351581573",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.000026915220587397926,
+          "collection": "set_xpshop_wpn_01",
+          "collectionName": "限定物品",
+          "price": 888.88,
+          "priceText": "¥888.88",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/1118771",
+          "buyUrl": "https://buff.163.com/goods/1118771#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=47397691122"
+        },
+        {
+          "market": "buff",
+          "goodsId": 1118771,
+          "orderId": "4150158663-B7E8-139312523",
+          "assetId": "47788167594",
+          "name": "M4A1消音版 | 幽独 (略有磨损)",
+          "paintwear": 0.07015693932771683,
+          "paintwearRaw": "0.07015693932771683",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.0019617376383394003,
+          "collection": "set_xpshop_wpn_01",
+          "collectionName": "限定物品",
+          "price": 49.8,
+          "priceText": "¥49.8",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/1118771",
+          "buyUrl": "https://buff.163.com/goods/1118771#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=47788167594"
+        },
+        {
+          "market": "buff",
+          "goodsId": 871443,
+          "orderId": "4175450274-B856-139312153",
+          "assetId": "54005359878",
+          "name": "USP消音版 | 银装素裹 (略有磨损)",
+          "paintwear": 0.07045982778072357,
+          "paintwearRaw": "0.07045982778072357",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.0057478430680930614,
+          "collection": "set_train_2021",
+          "collectionName": "2021 列车停放站收藏品",
+          "price": 1800,
+          "priceText": "¥1800",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/871443",
+          "buyUrl": "https://buff.163.com/goods/871443#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=54005359878"
+        },
+        {
+          "market": "buff",
+          "goodsId": 871443,
+          "orderId": "3813159296-A3FE-139217393",
+          "assetId": "40212228092",
+          "name": "USP消音版 | 银装素裹 (略有磨损)",
+          "paintwear": 0.07138391584157944,
+          "paintwearRaw": "0.07138391584157944",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.017298942431807518,
+          "collection": "set_train_2021",
+          "collectionName": "2021 列车停放站收藏品",
+          "price": 2600,
+          "priceText": "¥2600",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/871443",
+          "buyUrl": "https://buff.163.com/goods/871443#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=40212228092"
+        },
+        {
+          "market": "buff",
+          "goodsId": 871443,
+          "orderId": "4015040284-AFE6-139310473",
+          "assetId": "33613359897",
+          "name": "USP消音版 | 银装素裹 (略有磨损)",
+          "paintwear": 0.07321935892105103,
+          "paintwearRaw": "0.07321935892105103",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.04024197906255722,
+          "collection": "set_train_2021",
+          "collectionName": "2021 列车停放站收藏品",
+          "price": 4300,
+          "priceText": "¥4300",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/871443",
+          "buyUrl": "https://buff.163.com/goods/871443#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=33613359897"
+        },
+        {
+          "market": "buff",
+          "goodsId": 1119983,
+          "orderId": "4102218049-B434-139311167",
+          "assetId": "50093901252",
+          "name": "格洛克 18 型 | 镜面马赛克 (略有磨损)",
+          "paintwear": 0.07034269720315933,
+          "paintwearRaw": "0.07034269720315933",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.004283710848540068,
+          "collection": "set_community_36",
+          "collectionName": "创世纪收藏品",
+          "price": 300,
+          "priceText": "¥300",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/1119983",
+          "buyUrl": "https://buff.163.com/goods/1119983#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=50093901252"
+        },
+        {
+          "market": "buff",
+          "goodsId": 1119983,
+          "orderId": "3870230598-A619-139218900",
+          "assetId": "47253656079",
+          "name": "格洛克 18 型 | 镜面马赛克 (略有磨损)",
+          "paintwear": 0.07044040411710739,
+          "paintwearRaw": "0.07044040411710739",
+          "matRange": [
+            0.07,
+            0.15
+          ],
+          "norm": 0.005505047272890806,
+          "collection": "set_community_36",
+          "collectionName": "创世纪收藏品",
+          "price": 450,
+          "priceText": "¥450",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/1119983",
+          "buyUrl": "https://buff.163.com/goods/1119983#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=47253656079"
+        },
+        {
+          "market": "buff",
+          "goodsId": 781610,
+          "orderId": "4169462453-B832-139312189",
+          "assetId": "53975089094",
+          "name": "格洛克18型 | 摩登时代 (崭新出厂)",
+          "paintwear": 0.02714375965297222,
+          "paintwearRaw": "0.02714375965297222",
+          "matRange": [
+            0,
+            0.07
+          ],
+          "norm": 0.3877680003643036,
+          "collection": "set_community_26",
+          "collectionName": "裂空收藏品",
+          "price": 112.06,
+          "priceText": "¥112.06",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/781610",
+          "buyUrl": "https://buff.163.com/goods/781610#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=53975089094"
+        },
+        {
+          "market": "buff",
+          "goodsId": 781610,
+          "orderId": "4147842658-B78D-139312480",
+          "assetId": "53759422057",
+          "name": "格洛克18型 | 摩登时代 (崭新出厂)",
+          "paintwear": 0.02737538516521454,
+          "paintwearRaw": "0.02737538516521454",
+          "matRange": [
+            0,
+            0.07
+          ],
+          "norm": 0.391076922416687,
+          "collection": "set_community_26",
+          "collectionName": "裂空收藏品",
+          "price": 110.45,
+          "priceText": "¥110.45",
+          "tradable": true,
+          "url": "https://buff.163.com/goods/781610",
+          "buyUrl": "https://buff.163.com/goods/781610#sell_order",
+          "inspectUrl": "https://buff.163.com/api/market/cs2_inspect/?assetid=53759422057"
+        }
+      ]
+    }
+  ]
+}

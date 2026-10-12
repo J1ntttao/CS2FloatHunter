@@ -1,0 +1,128 @@
+{
+  "exportedAt": "2026-10-12T06:50:54.492Z",
+  "source": "manual:Cookie 请求头",
+  "site": "buff",
+  "referer": "https://buff.163.com/market/csgo",
+  "counts": {
+    "total": 13
+  },
+  "cookies": [
+    {
+      "domain": ".buff.163.com",
+      "name": "_ntes_nuid",
+      "value": "c31f9033c3a9ac27ba973eafc590bb32",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "_ntes_nnid",
+      "value": "c31f9033c3a9ac27ba973eafc590bb32,1768011501717",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "nts_mail_user",
+      "value": "13223696193@163.com:-1:1",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "timing_user_id",
+      "value": "time_bgHU0maa0m",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "NTES_P_UTID",
+      "value": "9shzdxX1Kqddi8jnR0RCgl4cXKfBQsu8|1791529700",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "P_INFO",
+      "value": "qq2379873505@163.com|1791529700|0|mail163|00&99|gud&1789385236&mail163#gud&440300#10#0#0|132193&1|mail163|qq2379873505@163.com",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "Device-Id",
+      "value": "4b2VojPQnrOlpA2lL1GN",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "qr_code_verify_ticket",
+      "value": "0bcWYyx95852d27b4ec884f8e65aca6c7996",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "remember_me",
+      "value": "U1095766937|OmOP9Lcbr5BuppbPOAZv1pNQ4jBUnVHu",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "session",
+      "value": "1-9bY4bw5uAI3cO36XbXCvgRxh2h8YkA805RWSoah9fSfi2040433857",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "Locale-Supported",
+      "value": "zh-Hans",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "game",
+      "value": "csgo",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    },
+    {
+      "domain": ".buff.163.com",
+      "name": "csrf_token",
+      "value": "IjM4ZjM0ZWZmNjlmNDJmY2QxNWVhZjliOWE0ZDk3YWY1NDhhZTQ0MWYi.asyCvA.Qy0BxFobMY8lofgrfD-gnzlhuY0",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "expires": 1794379854
+    }
+  ]
+}

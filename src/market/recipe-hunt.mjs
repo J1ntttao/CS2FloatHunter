@@ -112,6 +112,16 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
       .map(m => ({ id: m.id, name: m.name, collection: m.collection }));
     return { id: resumeState?.id || null, canContinue: !!resumeState && pending.length > 0, pending };
   };
+  const saveInterruptedItem = (material, errors) => {
+    if (!resumeState) return;
+    const available = pool.filter(l => l.recipeMaterialId === material.id).length;
+    const itemResult = { name: material.name, collection: material.collection, group: material.quotaGroupId,
+      required: material.count || 0, available, errors };
+    // 超时/取消会在当前请求完成前跳出，必须先把当前材料标记为未完成，
+    // 否则服务端只能看到之前已完成的材料，页面也不会显示继续按钮。
+    checkpointItems[material.id] = { complete: false, perItem: itemResult };
+    return itemResult;
+  };
   if (resumeState) resumeState.pendingMaterials = materialBands.map(m => ({ id: m.id, name: m.name, collection: m.collection }));
   let cookies = null;
   if (usesSteam) {
@@ -219,7 +229,10 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
         }
       }
     } catch (e) {
-      signal?.throwIfAborted();
+      if (signal?.aborted) {
+        saveInterruptedItem(material, [`请求中断：${e?.message || String(e)}`]);
+        throw e;
+      }
       errors.push(`请求异常：${e?.message || String(e)}`);
     }
     const available = pool.filter(l => l.recipeMaterialId === material.id).length;

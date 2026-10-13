@@ -126,6 +126,46 @@ verifyResult(resumed, 0.2);
 assert.equal(flakyCalls.length - callsBeforeResume, 1);
 console.log('✓ 继续抓取只重试失败材料并复用已成功候选');
 
+// 超时发生在某个材料请求中时，也要保存当前材料为未完成，重试只补抓它。
+const timeoutState = { id: 'timeout-resume-test', items: {} };
+const timeoutController = new AbortController();
+const timeoutCalls = [];
+let timeoutTriggered = false;
+const timeoutSteam = {
+  async listingsWithFloats(name) {
+    timeoutCalls.push(name);
+    const material = plan.materialSpecs.find(m => name.startsWith(m.nameEn + ' ('));
+    assert.ok(material);
+    if (material.id === 'UMP_45_连续体' && !timeoutTriggered) {
+      timeoutTriggered = true;
+      setTimeout(() => timeoutController.abort(new DOMException('搜索超时', 'TimeoutError')), 5);
+      await new Promise((resolve, reject) => {
+        timeoutController.signal.addEventListener('abort', () => reject(timeoutController.signal.reason), { once: true });
+      });
+    }
+    return { ok: true, pagesFetched: 1, listings: candidates(material, 0.2).map(l => ({ ...l, marketHashName: name })) };
+  },
+};
+await assert.rejects(
+  new CollectionHunter({ intervalMs: 0, signal: timeoutController.signal }).huntFromSteam({
+    recipePlan: plan, targetWear: 0.2, band: 0.001, steam: timeoutSteam, resumeState: timeoutState,
+  }),
+  e => e.name === 'TimeoutError',
+);
+assert.equal(timeoutState.items.R8左轮手枪_蕉农炮.complete, true);
+assert.equal(timeoutState.items.MAC_10_错觉.complete, true);
+assert.equal(timeoutState.items.UMP_45_连续体.complete, false);
+assert.ok(timeoutState.pendingMaterials.some(item => item.id === 'UMP_45_连续体'));
+const timeoutCallsBeforeRetry = timeoutCalls.length;
+const retrySteam = mockSteam(0.2);
+const retried = await new CollectionHunter({ intervalMs: 0 }).huntFromSteam({
+  recipePlan: plan, targetWear: 0.2, band: 0.001, steam: retrySteam, resumeState: timeoutState,
+}, { timeBudgetMs: 1000 });
+verifyResult(retried, 0.2);
+assert.equal(timeoutCalls.length, timeoutCallsBeforeRetry);
+assert.equal(retrySteam.queried.length, 1);
+console.log('✓ 搜索超时后保存未完成材料，重试只补抓该材料并复用已完成请求');
+
 const wrongOnly = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001,
   steam: mockSteam(0.2, { wrongOnly: true }) });
 assert.equal(wrongOnly.poolSize, 0);

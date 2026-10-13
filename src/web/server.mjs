@@ -374,10 +374,16 @@ async function handleHunt(req, res, url) {
       if (!r.resume?.canContinue) huntCheckpoints.delete(checkpoint.id);
     }, 15 * 60 * 1000);
   } catch (e) {
-    const resume = { id: checkpoint.id, canContinue: true, pending: Object.entries(checkpoint.items)
-      .filter(([, item]) => !item.complete).map(([id]) => ({ id })) };
+    const pending = Array.isArray(checkpoint.pendingMaterials)
+      ? checkpoint.pendingMaterials.filter(item => !checkpoint.items[item.id]?.complete)
+      : Object.entries(checkpoint.items)
+        .filter(([, item]) => !item.complete).map(([id]) => ({ id }));
+    const resume = { id: checkpoint.id, canContinue: pending.length > 0, pending };
     sendResume(resume);
-    send('error', { message: e?.message || String(e), resume });
+    const message = e?.name === 'TimeoutError'
+      ? '搜索超时，已保留成功材料。请点击“重试失败项（继续）”，只补抓失败或尚未完成的材料。'
+      : e?.message || String(e);
+    send('error', { message, resume });
   } finally {
     task.finish();
   }

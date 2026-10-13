@@ -8,6 +8,7 @@ import { once } from 'node:events';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import zlib from 'node:zlib';
 
 const ok = (condition, message) => {
   if (!condition) throw new Error(message);
@@ -153,6 +154,39 @@ try {
   );
 } finally {
   await new Promise(resolve => redirect.close(resolve));
+}
+
+// Steam/代理可能返回单层或组合 Content-Encoding；网络层必须把压缩正文还原后再交给 HTML/JSON 解析器。
+const compressed = http.createServer((req, res) => {
+  const payload = req.url === '/json' ? '{"ok":true,"source":"steam"}' : '<html><script id="valve-ssr-data">{"listings":[]}</script></html>';
+  if (req.url === '/combo') {
+    const gzip = zlib.gzipSync(Buffer.from(payload));
+    const body = zlib.brotliCompressSync(gzip);
+    res.writeHead(200, { 'content-type': 'text/plain', 'content-encoding': 'gzip, br' });
+    res.end(body);
+    return;
+  }
+  const body = req.url === '/json'
+    ? zlib.deflateSync(Buffer.from(payload))
+    : zlib.gzipSync(Buffer.from(payload));
+  res.writeHead(200, {
+    'content-type': req.url === '/json' ? 'application/json' : 'text/html',
+    'content-encoding': req.url === '/json' ? 'deflate' : 'gzip',
+  });
+  res.end(body);
+});
+compressed.listen(0, '127.0.0.1');
+await once(compressed, 'listening');
+try {
+  const base = `http://127.0.0.1:${compressed.address().port}`;
+  const page = await httpsGet(`${base}/html`);
+  const json = await httpsGet(`${base}/json`);
+  const combo = await httpsGet(`${base}/combo`);
+  ok(page.body.includes('valve-ssr-data'), 'gzip Steam 页面先解压再解析 SSR 数据');
+  ok(JSON.parse(json.body).source === 'steam', 'deflate Steam JSON 先解压再解析');
+  ok(combo.body.includes('valve-ssr-data'), '组合 Content-Encoding 按逆序完整解压');
+} finally {
+  await new Promise(resolve => compressed.close(resolve));
 }
 
 // 运行真实 Web 端点；CS2UP 请求故意悬挂，取消必须终止它并立即允许重搜。

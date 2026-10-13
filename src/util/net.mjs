@@ -209,13 +209,31 @@ export async function findLocalProxy() {
 }
 
 function decompress(buf, encoding) {
-  const enc = String(encoding || '');
+  // Content-Encoding 是按应用顺序列出的，读取时必须反向解码。
+  // 例如 `gzip, br` 表示先 gzip 再 br，收到的字节要先 brotli、再 gzip。
+  const encodings = String(encoding || '')
+    .split(',')
+    .map(value => value.trim().toLowerCase())
+    .filter(value => value && value !== 'identity')
+    .reverse();
+  let out = buf;
   try {
-    if (enc.includes('br')) return zlib.brotliDecompressSync(buf);
-    if (enc.includes('gzip')) return zlib.gunzipSync(buf);
-    if (enc.includes('deflate')) return zlib.inflateSync(buf);
-  } catch { /* 原样返回 */ }
-  return buf;
+    for (const encodingName of encodings) {
+      if (encodingName === 'br') out = zlib.brotliDecompressSync(out);
+      else if (encodingName === 'gzip' || encodingName === 'x-gzip') out = zlib.gunzipSync(out);
+      else if (encodingName === 'deflate') out = zlib.inflateSync(out);
+    }
+    return out;
+  } catch {
+    // 某些代理会丢失或改写 Content-Encoding。按常见压缩头再尝试一次，
+    // 成功后解析器拿到正文；仍失败则保留原始字节，由上层返回明确结构错误。
+    try {
+      if (out === buf && buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+        return zlib.gunzipSync(buf);
+      }
+    } catch { /* 保留原始响应，避免吞掉原始诊断信息 */ }
+    return buf;
+  }
 }
 
 /**

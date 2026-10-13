@@ -49,7 +49,8 @@ export function extractSid(input) {
 }
 
 /** 拉取分享配方 */
-export async function fetchShareRecipe(input, { timeoutMs = 25000 } = {}) {
+export async function fetchShareRecipe(input, { timeoutMs = 25000, signal } = {}) {
+  signal?.throwIfAborted();
   const sid = extractSid(input);
   if (!sid) {
     return { ok: false, error: 'invalid_sid', message: '链接里找不到 sid。正确形式：https://cs2up.cn/share.html?sid=xxxxxxxxxxxxxxxx' };
@@ -58,10 +59,11 @@ export async function fetchShareRecipe(input, { timeoutMs = 25000 } = {}) {
   try {
     res = await fetch(`${CS2UP}/api/share-payloads?id=${encodeURIComponent(sid)}`, {
       headers: { 'user-agent': UA, accept: 'application/json', referer: `${CS2UP}/share.html?sid=${sid}` },
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
     });
     text = await res.text();
   } catch (e) {
+    signal?.throwIfAborted();
     return { ok: false, error: 'network', message: `请求 CS2UP 失败：${e.message}` };
   }
 

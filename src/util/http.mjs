@@ -5,7 +5,7 @@
  * 所以这里统一走串行节流 + 指数退避；所有适配器都必须用它，不要直接用 fetch。
  */
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+import { setTimeout as delay } from 'node:timers/promises';
 
 export class HttpClient {
   /**
@@ -14,11 +14,12 @@ export class HttpClient {
    * @param {number} opts.maxRetries    429/5xx 重试次数
    * @param {string} opts.label        日志标签
    */
-  constructor({ minIntervalMs = 1200, maxRetries = 4, label = 'http', verbose = true } = {}) {
+  constructor({ minIntervalMs = 1200, maxRetries = 4, label = 'http', verbose = true, signal } = {}) {
     this.minIntervalMs = minIntervalMs;
     this.maxRetries = maxRetries;
     this.label = label;
     this.verbose = verbose;
+    this.signal = signal;
     this._last = 0;
     this._queue = Promise.resolve();
     this.stats = { requests: 0, retries: 0, throttled: 0, failures: 0 };
@@ -29,8 +30,9 @@ export class HttpClient {
   /** 串行化 + 最小间隔，避免并发触发风控 */
   _schedule(fn) {
     const run = this._queue.then(async () => {
+      this.signal?.throwIfAborted();
       const wait = this.minIntervalMs - (Date.now() - this._last);
-      if (wait > 0) await sleep(wait);
+      if (wait > 0) await delay(wait, undefined, { signal: this.signal });
       try { return await fn(); } finally { this._last = Date.now(); }
     });
     // 让队列不因单次失败而中断
@@ -41,11 +43,15 @@ export class HttpClient {
   /**
    * @returns {Promise<{ok:boolean,status:number,data:any,raw:string,throttled:boolean,error?:string}>}
    */
-  async request(url, { method = 'GET', headers = {}, body, timeoutMs = 25000, expectJson = true } = {}) {
+  async request(url, {
+    method = 'GET', headers = {}, body, timeoutMs = 25000, expectJson = true,
+    maxRetries = this.maxRetries,
+  } = {}) {
     return this._schedule(async () => {
       let attempt = 0;
       let lastErr = null;
-      while (attempt <= this.maxRetries) {
+      while (attempt <= maxRetries) {
+        this.signal?.throwIfAborted();
         attempt++;
         this.stats.requests++;
         try {
@@ -53,16 +59,16 @@ export class HttpClient {
             method,
             headers,
             body,
-            signal: AbortSignal.timeout(timeoutMs),
+            signal: this.signal ? AbortSignal.any([this.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
             redirect: 'follow',
           });
           const raw = await r.text();
 
-          if (r.status === 429 || r.status === 503) {
+          if ((r.status === 429 || r.status === 503) && attempt <= maxRetries) {
             this.stats.throttled++;
             const backoff = Math.min(60000, 2500 * 2 ** (attempt - 1)) + Math.random() * 700;
             this._log(`被限流 HTTP ${r.status}，第 ${attempt} 次重试，等待 ${Math.round(backoff)}ms`);
-            await sleep(backoff);
+            await delay(backoff, undefined, { signal: this.signal });
             continue;
           }
 
@@ -72,22 +78,23 @@ export class HttpClient {
           }
 
           // buff 用 HTTP 200 + code 字段表达限流/未登录，交给调用方判断
-          if (data && typeof data === 'object' && data.code === 'System Error' && attempt <= this.maxRetries) {
+          if (data && typeof data === 'object' && data.code === 'System Error' && attempt <= maxRetries) {
             this.stats.throttled++;
             const backoff = Math.min(60000, 2500 * 2 ** (attempt - 1)) + Math.random() * 700;
             this._log(`buff 返回 System Error（限流），第 ${attempt} 次重试，等待 ${Math.round(backoff)}ms`);
-            await sleep(backoff);
+            await delay(backoff, undefined, { signal: this.signal });
             continue;
           }
 
           return { ok: r.ok, status: r.status, data, raw, throttled: false };
         } catch (e) {
+          this.signal?.throwIfAborted();
           lastErr = e;
           this.stats.failures++;
-          if (attempt > this.maxRetries) break;
+          if (attempt > maxRetries) break;
           const backoff = Math.min(30000, 1500 * 2 ** (attempt - 1));
           this._log(`网络错误 ${e.name}: ${e.message}，第 ${attempt} 次重试，等待 ${backoff}ms`);
-          await sleep(backoff);
+          await delay(backoff, undefined, { signal: this.signal });
         }
       }
       return {
@@ -97,7 +104,7 @@ export class HttpClient {
     });
   }
 
-  async getJson(url, headers) { return this.request(url, { method: 'GET', headers }); }
+  async getJson(url, headers, options = {}) { return this.request(url, { ...options, method: 'GET', headers }); }
   async postJson(url, body, headers) {
     return this.request(url, {
       method: 'POST', headers, body: typeof body === 'string' ? body : JSON.stringify(body),

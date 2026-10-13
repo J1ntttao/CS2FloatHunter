@@ -17,7 +17,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { buildPoolFromBuff, buildPoolFromYoupin, poolStats, normalizePool } from './market/pool.mjs';
+import { buildPoolFromBuff, poolStats, normalizePool } from './market/pool.mjs';
 import {
   f32, requiredAvgNormalized, requiredNormalizedSum, outputWear, outputDistribution,
   solveCombinations, ieee754Info, verifyCombination,
@@ -67,9 +67,8 @@ function help() {
   --out-max <float>    产物磨损区间上限（默认 0.70）
   --rarity <key>       材料稀有度：consumer|industrial|milspec|restricted|classified（默认 classified）
                        隐秘(ancient) 产物的材料是 classified；隐蔽(legendary) 产物的材料是 restricted
-  --market <m>         数据源：buff | youpin | both（默认 buff）
-                       注意：youpin 匿名每个模板只能拿到 20 笔挂单，池子比 buff 小一个数量级
-  --max-templates <n>  youpin 最多检查多少个模板（默认 40）
+  --market <m>         数据源：buff（默认）
+  --max-templates <n>  最多检查多少个模板（默认 40）
   --mix                开启**混收藏品配方**：材料可以来自不同收藏品，
                        产物变成按材料数量加权的概率分布（网页会列出每个产物的概率）
   --no-mix             关闭混收藏品（默认关闭，即单收藏品→确定产物）
@@ -142,7 +141,7 @@ if (args.dry) {
     });
   }
 } else {
-  const markets = args.market === 'both' ? ['buff', 'youpin'] : [args.market];
+  const markets = [args.market];
   for (const mk of markets) {
     console.log(`\n──── 数据源：${mk} ────`);
     let r;
@@ -152,13 +151,8 @@ if (args.dry) {
         maxItems: args.maxItems, maxListingsPerItem: args.maxListingsPerItem,
         intervalMs: args.intervalMs, verbose: true,
       });
-    } else if (mk === 'youpin') {
-      r = await buildPoolFromYoupin({
-        rarity: args.rarity, wantAvg, band: args.band,
-        maxTemplates: args.maxTemplates, intervalMs: args.intervalMs, verbose: true,
-      });
     } else {
-      console.error(`  未知数据源 "${mk}"，可选 buff | youpin | both`);
+      console.error(`  未知数据源 "${mk}"，可选 buff`);
       process.exit(5);
     }
     if (r.error) {

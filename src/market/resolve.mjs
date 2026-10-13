@@ -15,8 +15,8 @@ import { BuffMarket } from './buff.mjs';
 import { normalizeWear } from '../tradeup/float.mjs';
 
 export class RecipeResolver {
-  constructor({ intervalMs = 2200, verbose = true, maxPerMaterial = 40 } = {}) {
-    this.buff = new BuffMarket({ minIntervalMs: intervalMs, verbose });
+  constructor({ intervalMs = 2200, verbose = true, maxPerMaterial = 40, signal } = {}) {
+    this.buff = new BuffMarket({ minIntervalMs: intervalMs, verbose, signal });
     this.verbose = verbose;
     this.maxPerMaterial = maxPerMaterial;
     this.http = this.buff.http;

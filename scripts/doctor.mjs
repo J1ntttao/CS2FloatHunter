@@ -2,7 +2,7 @@
 /**
  * 登录态与连通性自检。先跑这个，再跑抓取。
  *
- * 用法: node scripts/doctor.mjs [--site buff|youpin|all]
+ * 用法: node scripts/doctor.mjs [--site buff|all]
  */
 
 import path from 'node:path';
@@ -11,7 +11,7 @@ import { HttpClient } from '../src/util/http.mjs';
 
 const args = process.argv.slice(2);
 const siteArg = args.includes('--site') ? args[args.indexOf('--site') + 1] : 'all';
-const targets = siteArg === 'all' ? ['buff', 'youpin'] : [siteArg];
+const targets = siteArg === 'all' ? ['buff'] : [siteArg];
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -38,7 +38,7 @@ for (const site of targets) {
 
   // 关键登录 cookie 是否在
   const names = new Set(cookies.map(c => c.name));
-  const critical = site === 'buff' ? ['session'] : ['session', 'token', 'Authorization', 'uk'];
+  const critical = site === 'buff' ? ['session'] : [];
   const missing = critical.filter(n => !names.has(n));
   if (missing.length) console.log(`  ! 缺少常见登录字段: ${missing.join(', ')}（可能仍可用，先测）`);
 
@@ -70,24 +70,6 @@ for (const site of targets) {
     } else {
       console.log(`     返回: ${JSON.stringify(r2.data).slice(0, 200)}`);
     }
-  }
-
-  if (site === 'youpin') {
-    const r = await http.postJson(
-      'https://api.youpin898.com/api/homepage/es/commodity/GetCsGoPagedList',
-      { listSortType: 0, sortType: 0, pageIndex: 1, pageSize: 5, gameId: '730', commodityType: '' },
-      defaultHeaders('youpin', {
-        'content-type': 'application/json',
-        'app-version': '5.20.0',
-        'apptype': '1',
-        'devicetype': '1',
-        'platform': 'pc',
-        'deviceid': 'web',
-      }));
-    console.log(`\n  [市场列表探测] HTTP ${r.status} Code=${r.data?.Code ?? '-'} Msg=${r.data?.Msg ?? '-'}`);
-    const list = r.data?.Data || [];
-    console.log(`  => ${r.data?.Code === 0 ? `可用 ✓ 返回 ${list.length} 条` : '不可用 ✗'}`);
-    if (list[0]) console.log(`     样例字段: ${Object.keys(list[0]).join(', ')}`);
   }
 }
 

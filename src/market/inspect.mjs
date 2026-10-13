@@ -195,9 +195,10 @@ export function parseInspectIds(link) {
 
 /**
  * 构造 Steam 市场「直接指向该笔挂单」的链接。
- * 实测有效的形式是给 listings 页带上 listing 参数，会自动展开并高亮那一笔。
+ * 新版 Steam 用 detail 参数加载 initialSelectedListing，打开该笔挂单详情。
+ * listing 参数会被忽略，只显示商品的所有出售单。
  */
 export function steamListingUrl(marketHashName, listingId) {
   const base = `https://steamcommunity.com/market/listings/730/${encodeURIComponent(marketHashName)}`;
-  return listingId ? `${base}?listing=${listingId}` : base;
+  return listingId ? `${base}?detail=${encodeURIComponent(listingId)}` : base;
 }

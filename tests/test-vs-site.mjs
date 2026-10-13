@@ -47,9 +47,11 @@ const SiteUtils = sandbox.__Utils;
 if (!SiteUtils) { console.error('无法从站点源码取到 Utils'); process.exit(1); }
 console.log('✅ 已加载站点源码，Utils 方法:', Object.getOwnPropertyNames(SiteUtils).filter(n => typeof SiteUtils[n] === 'function').join(', '));
 
-// ---- 2. 用站点自己的公式算产物磨损（script.js:1238-1243）----
-function siteOutputWear(materials, outMin, outMax) {
+// ---- 2. 用站点自己的公式算产物磨损（script.js:1201-1202 + 1238-1243）----
+function siteOutputWear(materials, outMinRaw, outMaxRaw) {
   const G = SiteUtils.getIEEE754;
+  // 站点读取产物区间时就先落到 f32
+  const outMin = G(Number(outMinRaw)), outMax = G(Number(outMaxRaw));
   let normalizedSum = 0;
   for (const m of materials) {
     normalizedSum = G(normalizedSum + SiteUtils.normalizeWearForCalculation(m.wear, m.matMin, m.matMax));

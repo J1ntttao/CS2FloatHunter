@@ -1,22 +1,18 @@
 /**
- * 「按目标磨损凑 10 把」——但材料限定在某个配方的收藏品里。
+ * 材料搜索入口。Web 提供 recipePlan 时搜索同收藏品、同等级材料，保持收藏品配额。
  *
- * 用户流程：
- *   1. 粘贴 CS2UP 配方分享链接 → 定位到「哪个收藏品 + 哪一档材料」
- *   2. 输入想要的**产物磨损**
- *   3. 在该收藏品的这一档材料里，凑出 10 把能打出该磨损的皮肤
+ * 用户流程：粘贴分享链接，固定各收藏品投入数量，再按用户输入的产物磨损
+ * 搜索并求解。完整材料区间来自本地库，计算在归一化空间进行。
  *
- * 关键数学：同一收藏品内所有皮肤的磨损区间相同，所以
- *   产物磨损 = 平均(材料磨损) × (产物max − 产物min) + 产物min
- * 反推即得材料平均磨损；再用站点算法（先按各自区间归一化再平均）在 float32 下精确求解。
- *
- * 磨损区间一律以 BUFF 的 paintwear_range 为准（本地材料库的 min/max 实测有偏差）。
+ * 未提供 recipePlan 的旧收藏品搜索方法保留给直接调用方。
  */
 
-import { BuffMarket } from './buff.mjs';
+import { BuffMarket, EXTERIOR_RANGE, parseWearFromName } from './buff.mjs';
 import { materialsInCollection, nameFlags, normalizeName } from '../cs2up/materials.mjs';
 import { loadCookies } from '../auth/session.mjs';
 import { steamListingUrl } from './inspect.mjs';
+import { steamListingMatches } from './steam.mjs';
+import { huntRecipe } from './recipe-hunt.mjs';
 
 /** Steam 挂单的 eCurrency：23 = 人民币 */
 const CNY_CURRENCY_ID = 23;
@@ -26,12 +22,16 @@ import {
 } from '../tradeup/float.mjs';
 
 export class CollectionHunter {
-  constructor({ intervalMs = 2200, verbose = false } = {}) {
-    this.buff = new BuffMarket({ minIntervalMs: intervalMs, verbose });
+  constructor({ intervalMs = 2200, verbose = false, signal } = {}) {
+    this.buff = new BuffMarket({ minIntervalMs: intervalMs, verbose, signal });
     this.verbose = verbose;
+    this.signal = signal;
   }
 
   _log(...a) { if (this.verbose) console.log('[hunter]', ...a); }
+
+  /** 本地材料库查询（可在测试中覆盖） */
+  _materialsInCollection(name, grade) { return materialsInCollection(name, grade); }
 
   /**
    * 找出该收藏品里所有符合档位的皮肤，并解析成 BUFF 商品。
@@ -39,16 +39,22 @@ export class CollectionHunter {
    * @param {string} grade          内部代号，如 'restricted'
    * @param {boolean} statTrak      是否要暗金
    */
-  async enumerateMaterials(collectionName, grade, { statTrak = false, onProgress = () => {} } = {}) {
-    const all = materialsInCollection(collectionName, grade);
+  async enumerateMaterials(collectionName, grade, {
+    statTrak = false, onProgress = () => {}, materials = this._materialsInCollection(collectionName, grade),
+    requestOptions = {},
+  } = {}) {
+    const all = materials;
     onProgress(`收藏品「${collectionName}」${grade} 档共 ${all.length} 个皮肤，开始解析 BUFF 商品 ...`);
 
     const out = [];
     for (let i = 0; i < all.length; i++) {
       const m = all[i];
-      const l = await this.buff.listGoods({ search: m.name, pageSize: 50 });
+      this.signal?.throwIfAborted();
+      onProgress(`  [${i + 1}/${all.length}] 查询 ${m.name} 的 BUFF 商品名 ...`);
+      const l = await this.buff.listGoods({ search: m.name, pageSize: 50 }, requestOptions);
       if (!l.ok) {
         out.push({ db: m, ok: false, error: l.kind });
+        onProgress(`  [${i + 1}/${all.length}] ${m.name} → 查询失败（${l.kind}），跳过`);
         continue;
       }
       // 在结果里挑：名字匹配（忽略磨损后缀）+ StatTrak 口味一致 + 非纪念品
@@ -62,10 +68,15 @@ export class CollectionHunter {
       });
       if (!cands.length) {
         out.push({ db: m, ok: false, error: 'no_match' });
+        onProgress(`  [${i + 1}/${all.length}] ${m.name} → 没有匹配商品，跳过`);
         continue;
       }
       // 同一个皮肤有多个磨损档商品，全部收下（每个都有自己的区间与挂单）
-      out.push({ db: m, ok: true, variants: cands.map(c => ({ goodsId: c.id, name: c.name, sellNum: c.sell_num, minPrice: c.sell_min_price })) });
+      out.push({ db: m, ok: true, variants: cands.map(c => ({
+        goodsId: c.id, name: c.name, sellNum: c.sell_num, minPrice: c.sell_min_price,
+        // BUFF 列表已经带英文 market_hash_name；Steam-only 不必再逐档请求 goodsInfo。
+        marketHashName: c.market_hash_name || null,
+      })) });
       onProgress(`  [${i + 1}/${all.length}] ${m.name} → ${cands.length} 个磨损档商品`);
     }
     return out;
@@ -84,11 +95,14 @@ export class CollectionHunter {
    * 从 **Steam** 构建候选池并求解（真正只依赖 Steam 的路径）。
    *
    * 与 BUFF 路径的关键差别：
-   *   - 磨损不是「挂单字段」，而是**解码检视链接**得到的 → 只有能解出来的挂单才可用
+   *   - 磨损来自 Steam SSR 挂单的 asset_properties.propertyid=2 → 只有带真实商品身份的挂单才可用
    *   - Steam 挂单页按价格排序，未登录只能看有限几页 → 可能出现「附近没有合适磨损」的情况
    *   - 因此这条路径**不保证**能凑齐，凑不齐时必须如实报错，绝不能拿 BUFF 数据顶替
    */
   async huntFromSteam(cfg, { onProgress = () => {}, timeBudgetMs = 30000, wants = 5 } = {}) {
+    if (cfg.recipePlan) return huntRecipe({ ...cfg, dataSource: 'steam' }, {
+      buff: this.buff, signal: this.signal, onProgress, timeBudgetMs, wants,
+    });
     const {
       collectionName, materialGrade, targetWear, statTrak = false,
       band = 0.03, count = 10,
@@ -99,77 +113,132 @@ export class CollectionHunter {
 
     if (!steam) return { ok: false, error: 'no_steam', message: '未提供 Steam 客户端' };
 
-    // 1) 枚举该档位的皮肤（这一步来自本地材料库，与 BUFF 无关）
-    const mats = await this.enumerateMaterials(collectionName, materialGrade, { statTrak, onProgress });
-    const okMats = mats.filter(m => m.ok);
-    if (!okMats.length) {
-      return { ok: false, error: 'no_materials', message: `收藏品「${collectionName}」的 ${materialGrade} 档没有解析到任何皮肤。` };
+    // 1) 从本地材料库取该档位的皮肤列表和磨损区间（不依赖 BUFF 登录态）
+    const dbMats = this._materialsInCollection(collectionName, materialGrade);
+    if (!dbMats.length) {
+      return { ok: false, error: 'no_materials', message: `本地材料库里没有「${collectionName}」的 ${materialGrade} 档皮肤。` };
     }
+    onProgress(`收藏品「${collectionName}」${materialGrade} 档共 ${dbMats.length} 个皮肤（来自本地材料库）`);
 
-    // 2) 用 BUFF 只是为了拿**磨损区间**（判断哪些皮肤能覆盖目标磨损）——
-    //    这一步必须说清楚：区间信息本身不是价格/挂单，不构成"用 BUFF 求解"。
-    //    如果连区间都拿不到，就直接失败，不猜。
-    onProgress('获取各皮肤的磨损区间（用于判断哪些能覆盖目标磨损）...');
-    const cache = new Map();
-    const variants = [];
-    for (const m of okMats) {
-      for (const v of m.variants) {
-        const r = await this.range(v.goodsId, cache);
-        if (!r || r[1] <= r[0]) continue;
-        variants.push({ ...v, dbName: m.db.name, range: r });
-      }
-    }
-
-    // 只用「包含目标磨损本身」的那一个区间档。
-    // 以前是「区间与 目标±band 有交集」就收，band 大时会把相邻档（如 [0.07,0.15] 和 [0.15,0.35]）
-    // 混进同一个池子，且产物区间随手取了第一个变体的区间（如 [0,0.07]），导致求解结果完全错误。
+    // 2) 用本地库的 min/max 做区间筛选（不再依赖 BUFF goodsInfo）
     const avgWear = f32(targetWear);
-    const groupMap = new Map();
-    for (const v of variants) {
-      const k = `${v.range[0]}|${v.range[1]}`;
-      if (!groupMap.has(k)) groupMap.set(k, { range: v.range, items: [] });
-      groupMap.get(k).items.push(v);
-    }
-    const groups = [...groupMap.values()];
-    const hit = groups
-      .filter(g => g.range[0] <= avgWear && avgWear <= g.range[1])
-      .sort((a, b) => b.items.length - a.items.length)[0];
-    const skippedRanges = groups.filter(g => g !== hit).map(g => g.range);
-    if (!hit) {
+    const usable = dbMats.filter(m => m.min <= avgWear && avgWear <= m.max);
+    const skippedRanges = dbMats.filter(m => !(m.min <= avgWear && avgWear <= m.max))
+      .map(m => [m.min, m.max]);
+    if (!usable.length) {
       return {
         ok: false, error: 'no_usable_range',
         message: `该收藏品这一档没有任何磨损区间包含 ${targetWear}。` +
-          `可用区间只有 ${groups.map(g => `[${g.range[0]},${g.range[1]}]`).join('、')}。`,
+          `可用区间只有 ${dbMats.map(m => `[${m.min},${m.max}]`).join('、')}。`,
         skippedRanges,
       };
     }
-    const outRange = hit.range;
-    const lo = Math.max(outRange[0], avgWear - band);
-    const hi = Math.min(outRange[1], avgWear + band);
-    const usableVariants = hit.items;
-    onProgress(`可用皮肤 ${usableVariants.length} 个，磨损区间 [${outRange[0]}, ${outRange[1]}]，只收磨损在 [${lo.toFixed(4)}, ${hi.toFixed(4)}] 的挂单`);
-
-    // 3) 转成 Steam 需要的标识：**必须用 market_hash_name（英文名）**，
-    //    不能用中文名 —— 用中文名拼 /market/listings/730/<中文> 会拿到不含挂单数据的空壳
-    //    （实测表现为 no_listings_in_ssr，而且有时会"碰巧"重定向成功，非常难查）。
-    onProgress('向 BUFF 查询各商品的市场英文名（Steam 需要 market_hash_name）...');
-    const byHash = new Map();
-    for (const v of usableVariants) {
-      const info = await this.buff.goodsInfo(v.goodsId).catch(() => null);
-      const mhn = info && info.ok ? info.info?.market_hash_name : null;
-      if (!mhn) continue;
-      if (!byHash.has(mhn)) byHash.set(mhn, { ...v, marketHashName: mhn });
+    // 产物区间取可用皮肤中出现最多的那个
+    const rangeCount = new Map();
+    for (const m of usable) {
+      const k = `${m.min}|${m.max}`;
+      rangeCount.set(k, (rangeCount.get(k) || 0) + 1);
     }
+    const bestRangeKey = [...rangeCount.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const [outMin, outMax] = bestRangeKey.split('|').map(Number);
+    const outRange = [outMin, outMax];
+    const lo = Math.max(outMin, avgWear - band);
+    const hi = Math.min(outMax, avgWear + band);
+    onProgress(`可用皮肤 ${usable.length} 个，磨损区间 [${outMin}, ${outMax}]，搜索磨损带 [${lo.toFixed(4)}, ${hi.toFixed(4)}]`);
+
+    // 3) 尝试两条路径拿 market_hash_name：先试 BUFF（如果登录态有效），失败则用 Steam search
+    onProgress('查询各商品的 Steam 英文名 ...');
+    const byHash = new Map();
+    let usedBuff = false;
+    // 元数据只做快速查询：超时/限流时交给 Steam 搜索，避免逐商品退避数分钟。
+    const metadataOptions = { timeoutMs: 10000, maxRetries: 0 };
+    const usableNames = new Set(usable.map(m => m.name));
+    const intersectsBand = variant => {
+      const exterior = parseWearFromName(variant.name);
+      const range = EXTERIOR_RANGE[exterior];
+      return !range || (range[0] <= hi && range[1] > lo);
+    };
+
+    // 3a) 快速试一下 BUFF（仅当能搜到时）
+    try {
+      const testMats = await this.enumerateMaterials(collectionName, materialGrade, {
+        statTrak, onProgress, materials: usable, requestOptions: metadataOptions,
+      });
+      const okMats = testMats.filter(m => m.ok && usableNames.has(m.db.name));
+      if (okMats.length) {
+        usedBuff = true;
+        const missingNames = okMats.flatMap(m => m.variants.filter(intersectsBand)).filter(v => !v.marketHashName).length;
+        onProgress(`商品列表已解析，读取 Steam 英文名（${missingNames} 个商品需要补查详情）...`);
+        let detailIndex = 0;
+        for (const m of okMats) {
+          for (const v of m.variants.filter(intersectsBand)) {
+            this.signal?.throwIfAborted();
+            let mhn = v.marketHashName;
+            if (!mhn) {
+              onProgress(`  [${++detailIndex}/${missingNames}] 补查 ${v.name} 的 Steam 英文名（最多等待 10 秒）...`);
+              const info = await this.buff.goodsInfo(v.goodsId, metadataOptions).catch(() => {
+                this.signal?.throwIfAborted();
+                return null;
+              });
+              mhn = info?.ok ? info.info?.market_hash_name : null;
+              if (!mhn) onProgress(`  ${v.name} → 未取得英文名，将尝试 Steam 搜索`);
+            }
+            if (mhn && !byHash.has(mhn)) {
+              byHash.set(mhn, { ...v, dbName: m.db.name, marketHashName: mhn, range: outRange });
+            }
+          }
+        }
+      }
+    } catch {
+      this.signal?.throwIfAborted();
+      /* BUFF 完全不可用，继续降级 */
+    }
+
+    // 3b) BUFF 没拿到足够的英文名 → 用 Steam search API 降级
+    if (usable.some(m => ![...byHash.values()].some(v => v.dbName === m.name))) {
+      onProgress(usedBuff
+        ? `BUFF 只解析到 ${byHash.size} 个英文名，用 Steam 搜索补充 ...`
+        : 'BUFF 登录态不可用，用 Steam 搜索查找英文名 ...');
+      for (const m of usable) {
+        // 已经有了的跳过（按中文名去重）
+        if ([...byHash.values()].some(v => v.dbName === m.name)) continue;
+        onProgress(`Steam 搜索 ${m.name} 的英文名 ...`);
+        const sr = await steam.search({ query: m.name, count: 10 });
+        if (!sr.ok || !sr.results?.length) {
+          onProgress(`  ${m.name} → Steam 搜索无结果`);
+          continue;
+        }
+        // 从搜索结果中挑最匹配的
+        const stQuery = normalizeName(m.name);
+        const match = sr.results.find(r => {
+          const f = nameFlags(r.name);
+          if (!!statTrak !== f.statTrak) return false;
+          if (f.souvenir || f.knifeOrGlove) return false;
+          // Steam hash_name 是英文，中文搜索返回的结果里 hash_name 包含武器和皮肤名
+          return true; // 中文搜索结果通常就是精确匹配
+        }) || sr.results[0]; // 兜底取第一个
+        if (match && !byHash.has(match.name)) {
+          byHash.set(match.name, {
+            name: m.name, dbName: m.name, marketHashName: match.name,
+            range: outRange, goodsId: null,
+          });
+          onProgress(`  ${m.name} → ${match.name}`);
+        }
+      }
+    }
+
     const targets = [...byHash.values()].slice(0, maxItems);
     if (!targets.length) {
       return {
         ok: false, error: 'no_market_hash_name',
-        message: '拿不到任何商品的 Steam 英文名（market_hash_name），无法查询 Steam 挂单页。',
+        message: '无法查到任何商品的 Steam 英文名。请检查 BUFF 登录态或 Steam 连通性。',
       };
     }
     onProgress(`Steam：开始抓取 ${targets.length} 个商品的挂单页（每页 20 笔 × ${steamPages} 页），并读取每笔的精确磨损 ...`);
 
     const pool = [];
+    const seenListings = new Set();
+    const seenAssets = new Set();
     const perItem = [];
     const steamCookie = (() => {
       try {
@@ -177,11 +246,24 @@ export class CollectionHunter {
         return list.length ? list.map(c => `${c.name}=${c.value}`).join('; ') : null;
       } catch { return null; }
     })();
-    for (const t of targets) {
+    for (const [index, t] of targets.entries()) {
+      this.signal?.throwIfAborted();
+      onProgress(`  [${index + 1}/${targets.length}] 开始抓取 ${t.marketHashName} 的 Steam 挂单 ...`);
       const r = await steam.listingsWithFloats(t.marketHashName || t.name, { cookies: steamCookie, pages: steamPages });
       if (!r.ok) {
         perItem.push({ name: t.name, ok: false, error: r.error, rateLimited: !!r.rateLimited });
         onProgress(`  ${t.name} → 失败：${r.error}`);
+        const isRedirectFailure = /重定向(?:循环|次数超过)/.test(String(r.error || ''));
+        if (isRedirectFailure) {
+          return {
+            ok: false,
+            error: 'steam_redirect_loop',
+            message: 'Steam 商品页发生重定向循环/超限，已停止继续抓取。' +
+              '这通常是代理或 SteamTools 路由异常；请检查代理、关闭 SteamTools 拦截，或稍后重试。',
+            poolSize: pool.length,
+            perItem,
+          };
+        }
         continue;
       }
       const withFloat = r.listings.filter(l => l.floatvalue != null);
@@ -189,15 +271,22 @@ export class CollectionHunter {
       const nonCny = withFloat.filter(l => l.currencyId != null && l.currencyId !== CNY_CURRENCY_ID).length;
       let inBand = 0;
       for (const l of withFloat) {
+        // 聚合页数据必须按挂单自身的商品身份与磨损校验。
+        if (!steamListingMatches(l, t.marketHashName)) continue;
         if (l.floatvalue < lo || l.floatvalue > hi) continue;
         if (l.currencyId != null && l.currencyId !== CNY_CURRENCY_ID) continue;
+        if (!l.listingId || seenListings.has(l.listingId) ||
+            (l.assetId && seenAssets.has(l.assetId))) continue;
+        seenListings.add(l.listingId);
+        if (l.assetId) seenAssets.add(l.assetId);
         inBand++;
-        const buyUrl = steamListingUrl(t.marketHashName, l.listingId);
+        const actualMarketHashName = l.marketHashName || t.marketHashName;
+        const buyUrl = steamListingUrl(actualMarketHashName, l.listingId);
         pool.push({
           ...l,
           raw: undefined,
-          name: t.name,
-          marketHashName: t.marketHashName,
+          name: l.name || t.name,
+          marketHashName: actualMarketHashName,
           matRange: t.range,
           dbName: t.dbName,
           norm: normalizeWear(l.floatvalue, t.range[0], t.range[1]),
@@ -287,7 +376,7 @@ export class CollectionHunter {
       usableRanges: [outRange],
       band: [lo, hi],
       poolSize: pool.length,
-      materialCount: variants.length,
+      materialCount: usable.length,
       steamItems: { total: targets.length, ok: steamOk, perItem },
       exactFound: solved.exactFound,
       bestScore: solved.bestScore,
@@ -307,6 +396,9 @@ export class CollectionHunter {
    *   count           材料数量（默认 10）
    */
   async hunt(cfg, { onProgress = () => {}, timeBudgetMs = 30000, wants = 5 } = {}) {
+    if (cfg.recipePlan) return huntRecipe({ ...cfg, dataSource: cfg.dataSource === 'both' ? 'both' : 'buff' }, {
+      buff: this.buff, signal: this.signal, onProgress, timeBudgetMs, wants,
+    });
     const {
       collectionName, materialGrade, targetWear, statTrak = false,
       band = 0.02, count = 10,

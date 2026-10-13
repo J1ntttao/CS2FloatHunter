@@ -1,19 +1,12 @@
 /**
  * 候选池构建：把不同市场的数据统一成 { paintwear, price, ... } 的挂单列表。
  *
- * 两个市场的差异（都经实测）：
- *  - buff   ：列表接口可按 rarity 分页搜索；sell_order 支持 min_paintwear/max_paintwear 服务端过滤，
- *             每页可要 60 条，能抓到几百笔 → 求解精度高。
- *  - youpin ：匿名只能 pageIndex=1、每页固定 20 条；磨损过滤参数匿名不可用
- *             → 只能按 exterior 选模板，再客户端按 Abrade 过滤，池子小一个数量级。
+ * buff：列表接口可按 rarity 分页搜索；sell_order 支持 min_paintwear/max_paintwear 服务端过滤，
+ *       每页可要 60 条，能抓到几百笔 → 求解精度高。
  */
 
 import { BuffMarket, RARITY as BUFF_RARITY } from './buff.mjs';
-import { YoupinMarket, EXTERIOR_BY_CN, RARITY_BY_CN } from './youpin.mjs';
 import { f32, normalizeWear } from '../tradeup/float.mjs';
-
-/** 反向映射：内部稀有度代号 → 中文（youpin 用） */
-const CN_OF_RARITY = Object.fromEntries(Object.entries(RARITY_BY_CN).map(([cn, k]) => [k, cn]));
 
 /** 判断某件材料的磨损区间能否覆盖目标均值（决定它能不能用来凑这个配方） */
 export function coversAvg(range, avg, band) {
@@ -110,88 +103,6 @@ export async function buildPoolFromBuff({
     if (pool.length >= 800) { add('[buff] 候选池已达 800，停止抓取'); break; }
   }
   return { pool, usableItems, log };
-}
-
-/**
- * 从悠悠有品构建候选池。
- * 匿名：每个模板只有 20 笔挂单、模板目录只有 1 页 → 池子很小。
- * 有登录态（data/cookies.manual.youpin.json 里的 token）：可翻页、可用 min/maxAbrade 过滤 → 池子大得多。
- */
-export async function buildPoolFromYoupin({
-  rarity, wantAvg, band, maxTemplates = 40, intervalMs = 2500,
-  listTypes = [10, 20, 30, 40, 50], verbose = true,
-}) {
-  const yp = new YoupinMarket({ minIntervalMs: intervalMs, verbose });
-  const log = [];
-  const add = s => { log.push(s); if (verbose) console.log(s); };
-
-  const authed = yp.hasAuth;
-  add(`[youpin] 登录态：${authed ? '有（可翻页 + 磨损区间过滤）' : '无（匿名，每模板仅 20 笔、目录仅 1 页）'}`);
-  const cnRarity = CN_OF_RARITY[rarity];
-
-  // ---- 收集模板目录 ----
-  const seen = new Set();
-  const templates = [];
-  const types = authed ? listTypes : [listTypes[0]];
-  const pages = authed ? 5 : 1;
-  for (const listType of types) {
-    for (let pageIndex = 1; pageIndex <= pages; pageIndex++) {
-      const t = await yp.listTemplates({ listType, pageIndex });
-      if (!t.ok) { add(`[youpin]   模板 listType=${listType} p${pageIndex} -> ${t.kind}，停止`); break; }
-      let added = 0;
-      for (const x of t.templates) {
-        if (seen.has(x.templateId)) continue;
-        seen.add(x.templateId);
-        templates.push(x);
-        added++;
-      }
-      add(`[youpin]   模板 listType=${listType} p${pageIndex}: +${added}（累计 ${templates.length}）`);
-      if (!t.templates.length) break;
-    }
-  }
-
-  // ---- 过滤出能用的模板 ----
-  const usable = [];
-  for (const x of templates) {
-    if (cnRarity && x.rarity !== cnRarity) continue;
-    if (!x.range) continue;
-    const cov = coverage(x.range, wantAvg, band);
-    if (!cov.ok) continue;
-    usable.push({ ...x, lo: cov.lo, hi: cov.hi });
-  }
-  add(`[youpin] 稀有度+磨损区间都匹配的模板 ${usable.length} 件（目录共 ${templates.length} 件）`);
-  if (!usable.length) {
-    add('[youpin] 提示：匿名目录只有 20 件且顺序固定，几乎不可能刚好覆盖某个精确磨损。');
-    add('[youpin]       要真正可用，请录入登录 token：');
-    add('[youpin]       powershell -File scripts\\set-cookies.ps1 -Site youpin');
-    add('[youpin]       （Chrome 打开 youpin898.com → F12 → Application → Local Storage → 复制 uu_token）');
-  }
-
-  // ---- 抓挂单 ----
-  const pool = [];
-  for (const u of usable.slice(0, maxTemplates)) {
-    const maxPage = authed ? 5 : 1;
-    let got = 0, total = 0;
-    for (let pageIndex = 1; pageIndex <= maxPage; pageIndex++) {
-      const cl = await yp.commodityList({
-        templateId: u.templateId, pageIndex,
-        minAbrade: authed ? u.lo : undefined,
-        maxAbrade: authed ? u.hi : undefined,
-      });
-      if (!cl.ok) {
-        if (pageIndex === 1) add(`[youpin]   ${u.name} -> ${cl.kind}，跳过`);
-        break;
-      }
-      total = cl.total;
-      // 匿名不支持服务端磨损过滤，必须客户端筛
-      const keep = cl.listings.filter(l => l.paintwear != null && l.paintwear >= u.lo && l.paintwear <= u.hi);
-      for (const l of keep) pool.push({ ...l, matName: u.name, matRange: u.range, matIcon: u.iconUrl });
-      got += keep.length;
-      if (!cl.listings.length) break;
-    }
-    add(`[youpin]   ${u.name}  [${u.lo.toFixed(5)}, ${u.hi.toFixed(5)}]  ${got} 笔 / 总 ${total}`);
-  }
-  return { pool, usableItems: usable, log, authed };
 }
 
 /** 汇总统计，用于 HTML 展示 */

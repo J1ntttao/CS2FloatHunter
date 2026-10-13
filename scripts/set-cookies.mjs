@@ -13,7 +13,7 @@
  *   2) Cookie-Editor 导出的 JSON 数组 / {"cookies":[...]}
  *   3) name=value 每行一条
  *
- * 站点用 --site 指定（buff / youpin / steam / cs2up），默认 buff。
+ * 站点用 --site 指定（buff / steam / cs2up），默认 buff。
  */
 
 import fs from 'node:fs';
@@ -24,7 +24,6 @@ const DATA = path.join(ROOT, 'data');
 
 const SITES = {
   buff:   { domain: '.buff.163.com',   label: 'BUFF',      referer: 'https://buff.163.com/market/csgo' },
-  youpin: { domain: '.youpin898.com',  label: '悠悠有品',  referer: 'https://www.youpin898.com/' },
   steam:  { domain: 'steamcommunity.com', label: 'Steam 社区市场', referer: 'https://steamcommunity.com/market/' },
   cs2up:  { domain: 'cs2up.cn',        label: 'CS2UP',     referer: 'https://cs2up.cn/tradeup.html' },
 };

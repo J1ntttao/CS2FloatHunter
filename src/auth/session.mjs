@@ -6,7 +6,7 @@
  *   2. data/cookies.manual.<site>.json —— scripts/set-cookies.* 写入
  *   3. data/cookies.<profile>.json     —— scripts/export-cookies.* 写入（Chrome, 仅当 cookie 是 v10 等可解格式）
  *
- * 站点键：buff / youpin / steam / cs2up
+ * 站点键：buff / steam / cs2up
  */
 
 import fs from 'node:fs';
@@ -21,12 +21,6 @@ export const SITES = {
     domains: ['buff.163.com'],
     origin: 'https://buff.163.com',
     referer: 'https://buff.163.com/market/csgo',
-  },
-  youpin: {
-    label: '悠悠有品',
-    domains: ['youpin898.com'],
-    origin: 'https://www.youpin898.com',
-    referer: 'https://www.youpin898.com/',
   },
   steam: {
     label: 'Steam 社区市场',
@@ -94,12 +88,7 @@ export function loadCookiesDetailed(site) {
     if (bucket) push(path.join(DATA_DIR, 'credentials.json'), bucket.cookies || bucket, 'credentials.json');
   }
 
-  // 2) 手工录入
-  const manual = path.join(DATA_DIR, `cookies.manual.${site}.json`);
-  const mj = readJsonIfExists(manual);
-  if (mj) push(manual, mj.cookies, '手工录入');
-
-  // 3) Chrome 导出（任意 profile 文件里属于该站点的部分）
+  // 2) Chrome 导出（任意 profile 文件里属于该站点的部分）
   if (fs.existsSync(DATA_DIR)) {
     for (const f of fs.readdirSync(DATA_DIR)) {
       if (!/^cookies\..+\.json$/.test(f)) continue;
@@ -109,6 +98,11 @@ export function loadCookiesDetailed(site) {
       if (j) push(path.join(DATA_DIR, f), j.cookies, `Chrome 导出(${j.profile || '?'})`);
     }
   }
+
+  // 3) 手工录入优先，避免刚保存的登录态被旧 Chrome 导出覆盖。
+  const manual = path.join(DATA_DIR, `cookies.manual.${site}.json`);
+  const mj = readJsonIfExists(manual);
+  if (mj) push(manual, mj.cookies, '手工录入');
 
   return { cookies, sources };
 }

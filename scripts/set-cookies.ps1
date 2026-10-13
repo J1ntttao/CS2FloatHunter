@@ -11,11 +11,11 @@
 
 .EXAMPLE
   pwsh -File scripts\set-cookies.ps1 -Site buff
-  pwsh -File scripts\set-cookies.ps1 -Site youpin -FromFile cookies.txt
+  pwsh -File scripts\set-cookies.ps1 -Site steam -FromFile cookies.txt
 #>
 [CmdletBinding()]
 param(
-  [ValidateSet('buff', 'youpin', 'steam', 'cs2up')]
+  [ValidateSet('buff', 'steam', 'cs2up')]
   [string]$Site = 'buff',
   [string]$FromFile,
   [string]$String
@@ -25,7 +25,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $root = Split-Path -Parent $PSScriptRoot
 
-$labels = @{ buff = 'BUFF'; youpin = '悠悠有品'; steam = 'Steam 社区市场'; cs2up = 'CS2UP' }
+$labels = @{ buff = 'BUFF'; steam = 'Steam 社区市场'; cs2up = 'CS2UP' }
 
 Write-Host "=== 录入 $($labels[$Site]) Cookie ===" -ForegroundColor Cyan
 

@@ -25,6 +25,7 @@ import tls from 'node:tls';
 import zlib from 'node:zlib';
 import fs from 'node:fs';
 import { URL } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 
 export const DEFAULT_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -82,11 +83,15 @@ export async function probeProxy(host, port, timeoutMs = 2500) {
  *
  * 注意：整个握手过程用一个硬性 deadline 兜底，任何一步卡住都会抛错而不是永久挂起。
  */
-async function openTunnel(proxy, hostname, port, timeoutMs) {
+async function openTunnel(proxy, hostname, port, timeoutMs, signal) {
+  signal?.throwIfAborted();
   const deadline = Date.now() + timeoutMs;
   const left = () => Math.max(500, deadline - Date.now());
 
   const socket = net.connect({ host: proxy.host, port: proxy.port, timeout: left() });
+  const abort = () => socket.destroy(signal.reason);
+  signal?.addEventListener('abort', abort, { once: true });
+  socket.once('close', () => signal?.removeEventListener('abort', abort));
   const guard = setTimeout(() => { try { socket.destroy(); } catch {} }, timeoutMs + 2000);
   try {
     await new Promise((res, rej) => {
@@ -220,9 +225,19 @@ function decompress(buf, encoding) {
  * 必须跟随才能拿到真正的挂单页，所以默认 followRedirects=true。
  */
 export async function httpsGet(url, opts = {}) {
+  opts.signal?.throwIfAborted();
   const { followRedirects = true, maxRedirects = 5, ...rest } = opts;
   let current = url;
+  const visited = new Set();
   for (let i = 0; i <= maxRedirects; i++) {
+    opts.signal?.throwIfAborted();
+    if (visited.has(current)) {
+      const e = new Error(`重定向循环：${current}`);
+      e.code = 'REDIRECT_LOOP';
+      e.url = current;
+      throw e;
+    }
+    visited.add(current);
     const r = await httpsGetOnce(current, rest);
     if (followRedirects && r.status >= 300 && r.status < 400 && r.headers?.location) {
       const loc = r.headers.location;
@@ -231,13 +246,16 @@ export async function httpsGet(url, opts = {}) {
     }
     return { ...r, finalUrl: current };
   }
-  throw new Error(`重定向次数超过 ${maxRedirects}`);
+  const e = new Error(`重定向次数超过 ${maxRedirects}`);
+  e.code = 'REDIRECT_LIMIT';
+  e.url = current;
+  throw e;
 }
 
 async function httpsGetOnce(url, opts = {}) {
   const {
     proxy = null, allowInsecure = false, caFile = null,
-    headers = {}, timeoutMs = 25000, method = 'GET', body = null,
+    headers = {}, timeoutMs = 25000, method = 'GET', body = null, signal,
   } = opts;
 
   const u = new URL(url);
@@ -259,7 +277,7 @@ async function httpsGetOnce(url, opts = {}) {
 
   // ---------- 代理模式：HTTP CONNECT 或 SOCKS5 隧道 ----------
   if (proxy && isHttps) {
-    const socket = await openTunnel(proxy, u.hostname, port, timeoutMs);
+    const socket = await openTunnel(proxy, u.hostname, port, timeoutMs, signal);
 
     if (socket.destroyed) throw new Error('代理隧道建立后连接被关闭');
     socket.setTimeout(0);
@@ -289,7 +307,7 @@ async function httpsGetOnce(url, opts = {}) {
 
   // ---------- 代理 + 明文 HTTP（非 https 目标）----------
   if (proxy && !isHttps) {
-    const socket = await openTunnel(proxy, u.hostname, port, timeoutMs);
+    const socket = await openTunnel(proxy, u.hostname, port, timeoutMs, signal);
     socket.setTimeout(0);
     socket.write(
       `${method} ${path} HTTP/1.1\r\nHost: ${u.hostname}\r\n` +
@@ -311,7 +329,7 @@ async function httpsGetOnce(url, opts = {}) {
   if (!isHttps) {
     const lib = await import('node:http');
     return new Promise((resolve, reject) => {
-      const req = lib.request({ hostname: u.hostname, port, path, method, headers: baseHeaders, timeout: timeoutMs }, res => {
+      const req = lib.request({ hostname: u.hostname, port, path, method, headers: baseHeaders, timeout: timeoutMs, signal }, res => {
         const chunks = [];
         res.on('data', d => chunks.push(d));
         res.on('end', () => resolve({
@@ -330,7 +348,7 @@ async function httpsGetOnce(url, opts = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: u.hostname, port, path, method, headers: baseHeaders,
-      rejectUnauthorized, ca, timeout: timeoutMs,
+      rejectUnauthorized, ca, timeout: timeoutMs, signal,
     }, res => {
       const chunks = [];
       res.on('data', d => chunks.push(d));
@@ -395,17 +413,18 @@ function decodeChunked(buf) {
 /**
  * 组装一个「带节流 + 重试」的取数器，供各市场适配器使用。
  */
-export function makeFetcher({ proxy = null, allowInsecure = false, caFile = null, minIntervalMs = 1500, label = 'http' } = {}) {
+export function makeFetcher({ proxy = null, allowInsecure = false, caFile = null, minIntervalMs = 1500, label = 'http', signal } = {}) {
   let last = 0;
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const sleep = ms => delay(ms, undefined, { signal });
   return async function fetchOnce(url, { headers = {}, retries = 3, timeoutMs = 25000 } = {}) {
     let attempt = 0;
     while (true) {
+      signal?.throwIfAborted();
       attempt++;
       const wait = minIntervalMs - (Date.now() - last);
       if (wait > 0) await sleep(wait);
       try {
-        const r = await httpsGet(url, { proxy, allowInsecure, caFile, headers, timeoutMs });
+        const r = await httpsGet(url, { proxy, allowInsecure, caFile, headers, timeoutMs, signal });
         last = Date.now();
         if ((r.status === 429 || r.status === 503) && attempt <= retries) {
           const backoff = Math.min(30000, 2000 * 2 ** (attempt - 1)) + Math.random() * 500;
@@ -415,7 +434,10 @@ export function makeFetcher({ proxy = null, allowInsecure = false, caFile = null
         }
         return r;
       } catch (e) {
+        signal?.throwIfAborted();
         last = Date.now();
+        // 商品页短链循环/超过上限通常是代理或 Steam 路由异常，重试只会重复同一循环。
+        if (e?.code === 'REDIRECT_LOOP' || e?.code === 'REDIRECT_LIMIT') throw e;
         if (attempt > retries) throw e;
         const backoff = Math.min(15000, 1200 * 2 ** (attempt - 1));
         console.log(`[${label}] ${e.message}，第 ${attempt} 次重试，等待 ${backoff}ms`);

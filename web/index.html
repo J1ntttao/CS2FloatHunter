@@ -5,203 +5,315 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CS2 磨损猎人</title>
 <style>
+  /* Dark Gallery token：#0A0A0A 底 / #1A1A1A 面 / #2A2A2A 线 / #C4956A 琥珀元信息
+     font-light sans-serif / rounded-sm / 零阴影零渐变 */
   :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2a3240;
-    --fg:#e6edf3; --dim:#8b98a8; --acc:#f0a020; --ok:#3fb950; --err:#f85149; --info:#79c0ff;
-    --mono:ui-monospace,SFMono-Regular,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
+    --bg:#0A0A0A; --surface:#1A1A1A; --line:#2A2A2A;
+    --amber:#C4956A; --fg:#ffffff; --dim:#8A8A8A; --mute:#828282;
+    --ok:#6ECF8E; --warn:#C4956A; --err:#CF6E6E;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--fg);
-    font:14px/1.6 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
-  .wrap{max-width:1240px;margin:0 auto;padding:26px 20px 70px}
-  h1{margin:0 0 4px;font-size:22px}
-  h2{font-size:15px;margin:0 0 12px}
-  .sub{color:var(--dim);font-size:13px;margin-bottom:20px}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
-  label{display:block;color:var(--dim);font-size:12px;margin-bottom:6px}
-  input[type=text],input[type=number]{
-    width:100%;background:#0b1017;border:1px solid var(--line);border-radius:8px;
-    color:var(--fg);padding:11px 13px;font-size:14px;font-family:var(--mono);outline:none}
-  input:focus{border-color:#3d6ea8}
-  .row{display:grid;grid-template-columns:1fr 160px 160px;gap:14px;align-items:end}
-  @media(max-width:800px){.row{grid-template-columns:1fr}}
-  button{background:#1f6feb;border:none;border-radius:8px;color:#fff;padding:11px 24px;
-    font-size:14px;font-weight:600;cursor:pointer;margin-top:16px}
-  button:hover{background:#2b7ff5}
-  button:disabled{background:#2a3240;color:var(--dim);cursor:not-allowed}
-  .hint{color:var(--dim);font-size:12px;margin-top:12px;line-height:1.8}
-  .hint code{background:#0b1017;padding:1px 6px;border-radius:4px;color:var(--info);font-family:var(--mono)}
-  .status{margin-top:14px;font-family:var(--mono);font-size:12.5px;max-height:260px;overflow:auto}
-  .status .line{padding:3px 0;color:var(--dim)}
-  .status .line.act{color:var(--info)}
-  .status .line.ok{color:var(--ok)}
-  .status .line.bad{color:var(--err)}
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px}
-  .kv span{display:block;color:var(--dim);font-size:11.5px;margin-bottom:3px}
-  .kv strong{font-family:var(--mono);font-size:15px}
-  .kv strong.big{font-size:19px;color:var(--acc)}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th{text-align:left;padding:8px 12px;color:var(--dim);font-weight:500;font-size:11.5px;
-    border-bottom:1px solid var(--line);white-space:nowrap}
-  td{padding:8px 12px;border-bottom:1px solid #1e2531;vertical-align:top}
-  tr:last-child td{border-bottom:none}
-  tbody tr:hover{background:#1a2130}
-  .mono{font-family:var(--mono);white-space:nowrap}
-  .price{color:var(--acc);text-align:right;font-family:var(--mono)}
-  a.buy,a.insp{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;
-    text-decoration:none;margin-right:4px;border:1px solid transparent;white-space:nowrap}
-  a.buy{background:#12351f;color:#7ee787;border-color:#238636}
-  a.buy:hover{background:#1a4d2c}
-  a.insp{background:#1a2436;color:#79c0ff;border-color:#1f6feb}
-  a.insp:hover{background:#22304a}
-  a.steam{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:6px;font-size:11.5px;
-    text-decoration:none;background:#1a2436;color:#79c0ff;border:1px solid #1f6feb;white-space:nowrap}
-  a.steam:hover{background:#22304a}
-  .warn{background:#3a2d10;border:1px solid #6b5316;color:#f2cc60;
-    padding:10px 13px;border-radius:8px;font-size:12.5px;margin-bottom:10px}
-  .good-box{background:#0f2a17;border:1px solid #1c5b2c;color:#7ee787;
-    padding:10px 13px;border-radius:8px;font-size:12.5px;margin-bottom:10px}
-  .bad-box{background:#3d1418;border:1px solid #8b2c33;color:#ff9d95;
-    padding:10px 13px;border-radius:8px;font-size:12.5px;margin-bottom:10px}
-  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;
-    background:#1c2230;border:1px solid var(--line);color:var(--dim);margin-right:5px;margin-bottom:4px}
-  .recipe{border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden}
-  .recipe>header{background:var(--panel2);padding:12px 15px;display:flex;flex-wrap:wrap;
-    gap:12px;align-items:center;border-bottom:1px solid var(--line)}
-  .recipe>header .badge{font-size:12px;padding:3px 10px;border-radius:999px;font-weight:600}
-  .badge.exact{background:#0f2a17;color:#7ee787;border:1px solid #238636}
-  .badge.near{background:#3a2d10;color:#f2cc60;border:1px solid #6b5316}
-  .badge.steam-src{background:#1a2436;color:#79c0ff;border:1px solid #1f6feb}
-  .recipe>header .sp{margin-left:auto;display:flex;gap:18px}
-  .recipe>header .sp div{text-align:right}
-  .recipe>header .sp span{display:block;color:var(--dim);font-size:11px}
-  .recipe>header .sp strong{font-family:var(--mono);font-size:13.5px}
-  .hidden{display:none}
-  .err{color:var(--err)}
-  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-  .seg button{background:transparent;border:none;border-radius:0;color:var(--dim);
-    padding:9px 16px;margin:0;font-size:13px;font-weight:500;cursor:pointer;
-    border-right:1px solid var(--line)}
+    font:14px/1.65 system-ui,"PingFang SC","Microsoft YaHei",sans-serif;font-weight:300}
+  .shell{display:flex;min-height:100vh}
+
+  /* 侧栏 */
+  aside{width:220px;flex:none;background:var(--surface);border-right:1px solid var(--line);
+    padding:28px 20px;display:flex;flex-direction:column;gap:24px}
+  .brand{font-size:15px;font-weight:300;letter-spacing:.02em;color:var(--fg)}
+  .brand span{color:var(--amber);font-family:var(--mono);font-size:11px;
+    text-transform:uppercase;letter-spacing:.15em;display:block;margin-top:4px}
+  nav{display:flex;flex-direction:column;gap:2px}
+  nav a{display:block;padding:8px 12px;border:1px solid transparent;border-radius:2px;
+    color:var(--dim);text-decoration:none;font-size:12px;font-weight:300;
+    letter-spacing:.06em;transition:all .3s ease-out}
+  nav a:hover{color:var(--fg);border-color:var(--line)}
+  nav a.on{color:var(--fg);border-color:var(--line);background:var(--bg)}
+  .side-state{font-size:11px;color:var(--mute);line-height:2.1;letter-spacing:.04em}
+  .side-state b{color:var(--amber);font-weight:300}
+  .side-foot{margin-top:auto;font-size:10px;color:var(--mute);line-height:1.9;
+    text-transform:uppercase;letter-spacing:.15em;border-top:1px solid var(--line);padding-top:18px}
+
+  /* 主区 */
+  main{flex:1;min-width:0;padding:32px 32px 60px;max-width:1300px}
+  header.top{margin-bottom:28px;border-bottom:1px solid var(--line);padding-bottom:24px}
+  h1{margin:0;font-size:28px;font-weight:300;letter-spacing:-.02em;color:var(--fg)}
+  .lead{margin-top:6px;font-size:13px;font-weight:300;color:var(--dim);max-width:60ch}
+
+  .card{background:var(--bg);border:1px solid var(--line);border-radius:2px;
+    padding:24px;margin-bottom:20px;transition:all .3s ease-out}
+  h2{margin:0 0 16px;font-size:14px;font-weight:300;letter-spacing:.04em;color:var(--fg)}
+  .sect-label{color:var(--amber);font-size:10px;text-transform:uppercase;
+    letter-spacing:.15em;font-weight:300;margin:0 0 12px;display:block}
+
+  label{display:block;font-size:10px;color:var(--amber);margin-bottom:6px;
+    text-transform:uppercase;letter-spacing:.15em;font-weight:300}
+  input[type=text],input[type=number],textarea{
+    width:100%;background:var(--bg);border:1px solid var(--line);border-radius:2px;
+    padding:11px 14px;color:var(--fg);font-size:13px;font-weight:300;font-family:inherit;
+    outline:none;transition:all .3s ease-out}
+  textarea{font-family:var(--mono);font-size:12px;resize:vertical}
+  input::placeholder,textarea::placeholder{color:var(--mute)}
+  input:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 1px rgba(196,149,106,.3)}
+
+  .grid3{display:grid;grid-template-columns:1fr 170px 170px;gap:16px;align-items:end}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:900px){.grid3,.grid2{grid-template-columns:1fr}}
+
+  button{background:var(--surface);color:var(--fg);border:1px solid var(--line);
+    border-radius:2px;padding:10px 24px;font-size:12px;font-weight:300;
+    letter-spacing:.08em;font-family:inherit;cursor:pointer;transition:all .3s ease-out}
+  button:hover{border-color:var(--amber);color:var(--amber)}
+  button:active{opacity:.8}
+  button:disabled{color:var(--mute);border-color:var(--line);cursor:not-allowed}
+  button.ghost{background:transparent}
+
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+  .seg button{border:none;border-radius:0;border-right:1px solid var(--line);
+    padding:8px 16px;font-size:11px;letter-spacing:.06em}
   .seg button:last-child{border-right:none}
-  .seg button:hover{background:#1c2230;color:var(--fg)}
-  .seg button.on{background:#1f6feb;color:#fff}
-  .cheap{color:var(--ok);font-weight:600}
-  .dear{color:var(--dim);text-decoration:line-through}
-  footer{color:var(--dim);font-size:12px;margin-top:24px;border-top:1px solid var(--line);padding-top:14px;line-height:1.9}
+  .seg button:hover{background:var(--line);border-color:transparent;color:var(--fg)}
+  .seg button.on{background:var(--line);color:var(--amber)}
+
+  .check{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);
+    margin-top:12px;font-weight:300}
+  .check input{width:auto;accent-color:var(--amber)}
+
+  details>summary{cursor:pointer;font-size:11px;color:var(--amber);font-weight:300;
+    letter-spacing:.1em;text-transform:uppercase;list-style:none;
+    display:flex;align-items:center;gap:6px}
+  details>summary::-webkit-details-marker{display:none}
+  details>summary::before{content:'+';font-family:var(--mono);font-size:13px}
+  details[open]>summary::before{content:'−'}
+
+  .note{font-size:11px;color:var(--mute);line-height:1.9;margin-top:8px;font-weight:300}
+  .note code,code{background:var(--surface);border:1px solid var(--line);border-radius:2px;
+    padding:1px 6px;font-family:var(--mono);font-size:11px;color:var(--amber)}
+
+  .log{margin-top:16px;font-family:var(--mono);font-size:11px;max-height:220px;overflow:auto;
+    background:var(--surface);border:1px solid var(--line);border-radius:2px;padding:14px 16px}
+  .log:empty{display:none}
+  .log .line{padding:2px 0;color:var(--mute);font-weight:300}
+  .log .line.act{color:var(--amber)}
+  .log .line.ok{color:var(--ok)}
+  .log .line.bad{color:var(--err)}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden}
+  .kv{background:var(--bg);padding:14px 16px}
+  .kv span{display:block;font-size:10px;color:var(--amber);margin-bottom:4px;
+    text-transform:uppercase;letter-spacing:.15em;font-weight:300}
+  .kv strong{font-family:var(--mono);font-size:13px;color:var(--fg);font-weight:300}
+  .kv.hero strong{font-size:18px;color:var(--amber)}
+  .kv.good strong{color:var(--ok)}
+
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;padding:10px 14px;font-size:10px;font-weight:300;color:var(--amber);
+    text-transform:uppercase;letter-spacing:.12em;
+    border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top;font-weight:300}
+  tr:last-child td{border-bottom:none}
+  tbody tr{transition:all .3s ease-out}
+  tbody tr:hover{background:var(--surface)}
+  .mono{font-family:var(--mono);white-space:nowrap}
+  .price{text-align:right;font-family:var(--mono);color:var(--amber)}
+  .price strong{font-weight:700}
+  .sub{font-size:10px;color:var(--mute);margin-top:2px;font-weight:300}
+
+  a.link{display:inline-block;margin-top:4px;padding:3px 10px;border:1px solid var(--line);
+    border-radius:2px;font-size:10px;text-decoration:none;color:var(--dim);
+    letter-spacing:.06em;transition:all .3s ease-out;white-space:nowrap}
+  a.link:hover{border-color:var(--amber);color:var(--amber)}
+  a.link.gold{color:var(--amber);border-color:var(--amber)}
+
+  .msg{border:1px solid var(--line);border-radius:2px;padding:12px 16px;
+    font-size:11px;margin-bottom:14px;line-height:1.8;font-weight:300}
+  .msg.good{border-color:#2a3a2a;color:var(--ok);background:rgba(110,207,142,.06)}
+  .msg.warn{border-color:#3a2a1a;color:var(--amber);background:rgba(196,149,106,.06)}
+  .msg.bad{border-color:#3a1a1a;color:var(--err);background:rgba(207,110,110,.06)}
+
+  .pill{display:inline-block;font-size:10px;padding:3px 10px;border:1px solid var(--line);
+    border-radius:2px;color:var(--dim);margin:0 5px 5px 0;font-weight:300;letter-spacing:.04em}
+
+  .badge{font-size:10px;padding:3px 10px;border:1px solid var(--line);border-radius:2px;
+    font-weight:300;letter-spacing:.06em}
+  .badge.exact{border-color:#2a3a2a;color:var(--ok)}
+  .badge.near{border-color:#3a2a1a;color:var(--amber)}
+  .badge.src{color:var(--dim)}
+
+  .recipe{background:var(--surface);border:1px solid var(--line);border-radius:2px;
+    margin-bottom:16px;overflow:hidden;transition:all .3s ease-out}
+  .recipe:hover{border-color:#3A3A3A}
+  .recipe>.head{padding:14px 18px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;
+    border-bottom:1px solid var(--line)}
+  .recipe>.head b{font-size:13px;font-weight:300;color:var(--fg)}
+  .recipe>.head .sp{margin-left:auto;display:flex;gap:22px;flex-wrap:wrap}
+  .recipe>.head .sp div{text-align:right}
+  .recipe>.head .sp span{display:block;font-size:10px;color:var(--amber);
+    text-transform:uppercase;letter-spacing:.12em;font-weight:300}
+  .recipe>.head .sp strong{font-family:var(--mono);font-size:12px;font-weight:300}
+  .recipe .order{padding:12px 18px;border-top:1px solid var(--line);
+    font-size:11px;color:var(--mute);font-weight:300}
+  .recipe .order b{color:var(--amber);font-family:var(--mono)}
+
+  .cheap{color:var(--ok)}
+  .dear{color:var(--mute);text-decoration:line-through}
+  .scroll{overflow-x:auto}
+  .buy-all{border-color:var(--ok);color:var(--ok);padding:6px 14px;font-size:11px;
+    letter-spacing:.06em;cursor:pointer}
+
+  /* 购买清单弹层 */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:900;
+    display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;
+    transition:opacity .3s ease-out}
+  .overlay.open{opacity:1;pointer-events:auto}
+  .buy-panel{background:var(--surface);border:1px solid var(--line);border-radius:2px;
+    width:90%;max-width:560px;max-height:80vh;overflow:auto;padding:24px}
+  .buy-panel h3{margin:0 0 16px;font-size:15px;font-weight:300;color:var(--fg)}
+  .buy-list{list-style:none;padding:0;margin:0}
+  .buy-list li{display:flex;align-items:center;gap:12px;padding:10px 0;
+    border-bottom:1px solid var(--line);font-size:12px;font-weight:300}
+  .buy-list li:last-child{border-bottom:none}
+  .buy-list .idx{color:var(--mute);font-family:var(--mono);width:24px;flex:none;text-align:right}
+  .buy-list .info{flex:1;min-width:0}
+  .buy-list .info .nm{color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .buy-list .info .fl{color:var(--amber);font-family:var(--mono);font-size:11px;margin-top:2px}
+  .buy-list .go{flex:none}
+  .buy-list .go a{display:inline-block;padding:5px 14px;border:1px solid var(--line);
+    border-radius:2px;color:var(--ok);font-size:11px;text-decoration:none;
+    letter-spacing:.06em;transition:all .3s ease-out;white-space:nowrap}
+  .buy-list .go a:hover{border-color:var(--ok)}
+  .buy-list .go a.visited{color:var(--mute);border-color:var(--line)}
+  .buy-bar{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  .buy-bar button{font-size:11px;padding:8px 16px}
+
+  @media(max-width:860px){
+    .shell{flex-direction:column}
+    aside{width:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:14px;
+      padding:14px 20px;border-right:none;border-bottom:1px solid var(--line)}
+    nav{flex-direction:row;flex-wrap:wrap}
+    .side-state,.side-foot{display:none}
+    main{padding:20px 16px 44px}
+  }
+  @media(prefers-reduced-motion:reduce){
+    *{transition:none!important}
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>CS2 磨损猎人</h1>
-  <div class="sub">粘贴配方链接确定收藏品 → 输入你想要的产物磨损 → 自动搜出能打出这个磨损的 10 把皮肤</div>
+<div class="shell">
+<aside>
+  <div class="brand">CS2 磨损猎人<span>Float Hunter</span></div>
+  <nav>
+    <a href="#search" class="on">搜索</a>
+    <a href="#located">收藏品</a>
+    <a href="#summary">概要</a>
+    <a href="#recipes">配方</a>
+  </nav>
+  <div class="side-state">
+    BUFF <b id="buffState">检查中</b><br>
+    Steam <b id="steamState">检查中</b>
+  </div>
+  <div class="side-foot">
+    算法对齐 68688888.github.io<br>
+    挂单随时被买走 尽快下单
+  </div>
+</aside>
 
-  <div class="panel">
-    <label>① CS2UP 配方分享链接（用来确定「哪个收藏品 / 哪一档材料」）</label>
+<main>
+  <header class="top">
+    <h1>CS2 磨损猎人</h1>
+    <div class="lead">贴配方链接定收藏品，填目标产物磨损，自动搜出能打出这个磨损的 10 把材料。</div>
+  </header>
+
+  <section class="card" id="search">
+    <h2>搜索条件</h2>
+    <label for="link">CS2UP 配方分享链接</label>
     <input type="text" id="link" placeholder="https://cs2up.cn/share.html?sid=7928752d714f8e31"
            value="https://cs2up.cn/share.html?sid=7928752d714f8e31">
+    <div class="note">保留链接中每个收藏品的投入数量，允许替换为同收藏品、同等级的其它枪皮；材料磨损根据你输入的目标产物磨损重新计算。也可只贴 <code>sid</code>。</div>
+    <label class="check"><input type="checkbox" id="stattrak"> 暗金（StatTrak™）</label>
+    <div class="note" id="qualityNote">读取链接后自动跟随配方品质，可手动切换。</div>
 
-    <div class="row" style="margin-top:16px">
+    <div class="grid3" style="margin-top:18px">
       <div>
-        <label>② 想要的产物磨损值</label>
-        <input type="number" id="wear" value="0.2" step="0.0000001" min="0.000001" max="0.999999">
+        <label for="wear">目标产物磨损</label>
+        <input type="number" id="wear" value="0.22222222" step="0.0000001" min="0.000001" max="0.999999">
       </div>
       <div>
-        <label>磨损搜索半径</label>
-        <input type="number" id="band" value="0.03" step="0.005" min="0.002" max="0.15">
+        <label for="band">磨损搜索半径</label>
+        <input type="number" id="band" value="0.2" step="0.005" min="0.002" max="0.15">
       </div>
       <div>
-        <label>请求间隔 (ms)</label>
+        <label for="interval">请求间隔 (ms)</label>
         <input type="number" id="interval" value="2200" step="100" min="1200" max="8000">
       </div>
     </div>
 
-    <div style="margin-top:16px">
-      <label>③ 检索范围</label>
+    <div style="margin-top:20px">
+      <label>检索范围</label>
       <div class="seg" id="marketSeg">
         <button type="button" data-m="buff" class="on">仅 BUFF</button>
         <button type="button" data-m="both">BUFF + Steam 比价</button>
         <button type="button" data-m="steam">仅 Steam</button>
       </div>
-      <div class="hint" style="margin-top:8px">
-        <b>仅 BUFF</b>：唯一能拿到<b>逐笔精确磨损</b>的来源，用来精确求解。<br>
-        <b>BUFF + Steam</b>：以 BUFF 求解，同时查 Steam 最低价做比价，标出哪边更便宜。<br>
-        <b>仅 Steam</b>：Steam 拿不到逐笔磨损（其挂单 float 只在游戏内检视数据里），
-        只能给「该商品该磨损档的最低价」，<b>无法保证命中你指定的精确磨损</b>，仅作价格参考。<br>
-        Steam 部分需要能访问 <code>steamcommunity.com</code>；本机若有 SteamTools 等中间人，
-        已默认放宽证书校验（可用下方开关关闭）。
-      </div>
-      <label style="margin-top:12px">代理（可选，支持 http:// 与 socks5:// 前缀；留空则自动探测/读环境变量）</label>
-      <input type="text" id="proxy" placeholder="例如 socks5://127.0.0.1:1080 或 http://127.0.0.1:7890">
-      <label style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--fg)">
-        <input type="checkbox" id="insecure" checked style="width:auto"> 放宽 Steam 的证书校验（本机有中间人代理时需要）
-      </label>
+      <div class="note" id="marketNote">BUFF 提供逐笔精确磨损，用于精确求解。</div>
     </div>
 
-    <details style="margin-top:16px" id="cookieBox">
-      <summary style="cursor:pointer;color:var(--info);font-size:13px">④ 登录态设置（BUFF Cookie / Steam Cookie）— 点开填写</summary>
-      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <details style="margin-top:20px">
+      <summary>代理与登录态</summary>
+      <div style="margin-top:16px">
+        <label for="proxy">代理（支持 http:// 与 socks5://，留空自动探测）</label>
+        <input type="text" id="proxy" value="http://127.0.0.1:7897">
+        <label class="check"><input type="checkbox" id="insecure" checked> 放宽 Steam 证书校验</label>
+      </div>
+      <div class="grid2" style="margin-top:18px">
         <div>
-          <label>BUFF Cookie <span id="buffState" style="color:var(--dim)"></span></label>
-          <textarea id="buffCookie" rows="4" placeholder="从 Chrome 里复制 buff.163.com 的 Cookie 整行，例如：&#10;session=...; csrf_token=...; Device-Id=..." style="width:100%;background:#0b1017;border:1px solid var(--line);border-radius:8px;color:var(--fg);padding:10px;font-family:var(--mono);font-size:12px;resize:vertical"></textarea>
-          <div style="color:var(--dim);font-size:11.5px;margin-top:6px;line-height:1.7">
-            F12 → Network → 刷新 → 点任意请求 → Request Headers 里的 <code>Cookie:</code> 整行。<br>
-            <b>必需</b>：BUFF 的搜索接口必须登录才能用。
-          </div>
+          <label for="buffCookie">BUFF Cookie（完整请求头）</label>
+          <textarea id="buffCookie" rows="3" placeholder="session=...; csrf_token=...; Device-Id=..."></textarea>
+          <div class="note">登录 buff.163.com，按 F12 → Network → 该站点的请求 → Request Headers，复制完整 <code>Cookie</code> 值，必须包含 <code>session</code>；支持 <code>Cookie:</code> 前缀和 Cookie-Editor JSON。仅 Steam 模式可留空。</div>
         </div>
         <div>
-          <label>Steam 登录态 <span id="steamState" style="color:var(--dim)"></span></label>
-          <textarea id="steamCookie" rows="4" placeholder="推荐只粘贴 steamLoginSecure 的值，形如：&#10;76561198xxxxxxxxx%7C%7C<一长串十六进制>&#10;&#10;也可以粘贴完整的 Cookie 整行" style="width:100%;background:#0b1017;border:1px solid var(--line);border-radius:8px;color:var(--fg);padding:10px;font-family:var(--mono);font-size:12px;resize:vertical"></textarea>
-          <div style="color:var(--dim);font-size:11.5px;margin-top:6px;line-height:1.7">
-            Steam 登录态由 <code>steamLoginSecure</code> 承载（值形如 <code>&lt;steamid64&gt;%7C%7C&lt;token&gt;</code>）。
-            F12 → Application → Cookies → <code>steamcommunity.com</code> → 复制 <code>steamLoginSecure</code> 的 Value。<br>
-            逐笔磨损靠<b>本地解码检视链接</b>得到，不需要 CSFloat 服务；
-            但<b>要能打开 Steam 挂单页</b>（本机被 SteamTools 拦，需代理）。
-          </div>
+          <label for="steamLoginSecure">steamLoginSecure（仅值）</label>
+          <textarea id="steamLoginSecure" rows="3" placeholder="SteamID64||JWT（也支持 SteamID64%7C%7CJWT）"></textarea>
+          <div class="note">登录 steamcommunity.com，按 F12 → Application → Cookies → steamcommunity.com，复制 <code>steamLoginSecure</code> 的 Value。格式为 17 位 SteamID + <code>||</code> + 三段 JWT；只填写值，不要带 <code>steamLoginSecure=</code> 或其他 Cookie 字段。</div>
         </div>
       </div>
-
-      <div style="margin-top:12px">
-        <label>CSFloat 令牌（可选，用于备用解码通道）</label>
-        <input type="text" id="csfloatToken" placeholder="eyJ...（可留空）">
-        <div style="color:var(--dim);font-size:11.5px;margin-top:6px;line-height:1.7">
-          实测 <code>api.csfloat.com</code> 已<b>无法解析域名</b>（官方 2026-03 起废弃），
-          所以这栏基本用不上，留着以防官方恢复。留空即可。
-        </div>
+      <div style="margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <button type="button" class="ghost" id="saveCookies">保存并验证</button>
+        <span id="saveMsg" style="font-size:11px;color:var(--mute)"></span>
       </div>
-
-      <div style="margin-top:12px">
-        <button type="button" id="saveCookies" style="margin-top:0;background:#238636">保存并验证登录态</button>
-        <span id="saveMsg" style="margin-left:12px;font-size:12.5px"></span>
-      </div>
-      <div id="verifyBox" style="margin-top:10px"></div>
+      <div id="verifyBox" style="margin-top:14px"></div>
     </details>
 
-    <button id="go">开始搜索 10 把材料</button>
-
-    <div class="hint">
-      链接形如 <code>https://cs2up.cn/share.html?sid=&lt;16位id&gt;</code>，也可以只贴 <code>sid</code> 本身。<br>
-      链接<b>只用来定位</b>「哪个收藏品、哪一档材料」（例如「创世纪收藏品 · 受限级」）；
-      <b>目标磨损由你决定</b>，不必和链接里那个配方一样。<br>
-      <b>磨损搜索半径</b>：在算出的材料目标磨损上下各搜多大范围。调大更容易凑齐，但抓取更慢。<br>
-      <b>原理</b>：同一收藏品内所有皮肤的磨损区间相同，所以「想要的产物磨损」就等于「材料的平均磨损」。
+    <div style="margin-top:24px;display:flex;gap:12px;align-items:center">
+      <button id="go">开始搜索</button>
+      <button id="stop" class="ghost" style="display:none;border-color:var(--err);color:var(--err)">停止搜索</button>
     </div>
-    <div class="status" id="status"></div>
-  </div>
+    <div class="log" id="status" aria-live="polite"></div>
+  </section>
 
   <div id="locBox"></div>
   <div id="resultBox"></div>
+</main>
 
-  <footer>
-    计算引擎：<b>西林磨损计算器</b>（68688888.github.io）的官方算法，已与其源码逐位对齐。<br>
-    收藏品/材料清单来自配方链接 + 本地材料库；<span id="srcNote">挂单与精确磨损来自 BUFF163</span>。挂单随时可能被买走，请尽快下单。
-  </footer>
+<div class="overlay" id="buyOverlay" onclick="if(event.target===this)closeBuyPanel()">
+  <div class="buy-panel" id="buyPanel"></div>
+</div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = v => (v == null || !isFinite(v)) ? '-' : '¥' + Number(v).toFixed(2);
-const wear = v => (v == null || !isFinite(v)) ? '-' : Number(v).toFixed(10);
+const wearFmt = v => (v == null || !isFinite(v)) ? '-' : Number(v).toFixed(10);
+const MARKET_LABEL = { buff: '仅 BUFF', both: 'BUFF + Steam 比价', steam: '仅 Steam' };
+const MARKET_NOTE = {
+  buff: 'BUFF 提供逐笔精确磨损，用于精确求解。',
+  both: 'BUFF 和 Steam 都搜索真实挂单磨损，合并求解；两边价格与购买链接并列，较便宜的价格加粗。',
+  steam: '搜索链接收藏品中的全部同等级枪皮，严格保持收藏品数量比例；Steam 挂单按价格排序，某个收藏品材料不足时会明确提示。',
+};
 
 function statusLine(text, cls = '') {
   const d = document.createElement('div');
@@ -210,281 +322,409 @@ function statusLine(text, cls = '') {
   $('status').appendChild(d);
   $('status').scrollTop = $('status').scrollHeight;
 }
-
 function reset() {
   $('status').innerHTML = '';
   $('locBox').innerHTML = '';
   $('resultBox').innerHTML = '';
 }
-
 function renderLocated(d) {
-  const n = d.materials ? d.materials.length : 0;
+  const groups = d.collectionSpecs || [];
+  const mats = groups.map(m => `${m.collection} × ${m.count}（${m.candidateCount} 种同等级枪皮）`);
   $('locBox').innerHTML = `
-    <div class="panel">
-      <h2>已定位</h2>
-      <div class="kpis" style="margin-bottom:12px">
-        <div class="kv"><span>检索范围</span><strong>${MARKET === 'steam' ? '仅 Steam' : MARKET === 'both' ? 'BUFF + Steam 比价' : '仅 BUFF'}</strong></div>
+    <span class="sect-label" id="located">已定位</span>
+    <section class="card">
+      <div class="kpis">
         <div class="kv"><span>收藏品</span><strong>${esc(d.collection)}</strong></div>
         <div class="kv"><span>材料档位</span><strong>${esc(d.grade || '-')}</strong></div>
-        <div class="kv"><span>该档皮肤数</span><strong>${d.materialCount}</strong></div>
-        <div class="kv"><span>你要的产物磨损</span><strong class="big">${esc(d.targetWear)}</strong></div>
+        <div class="kv"><span>搜索品质</span><strong>${d.statTrak ? '暗金（StatTrak™）' : '普通'}</strong></div>
+        <div class="kv"><span>同等级候选枪皮</span><strong>${groups.reduce((n, m) => n + m.candidateCount, 0)}</strong></div>
+        <div class="kv"><span>目标产物</span><strong>${esc(d.targetOutput || '-')}</strong></div>
+        <div class="kv hero"><span>目标产物磨损</span><strong>${esc(d.targetWear)}</strong></div>
         <div class="kv"><span>配方稀有度</span><strong>${esc(d.recipe?.inputRarityLabel || '?')} → ${esc(d.recipe?.outputRarityLabel || '?')}</strong></div>
+        <div class="kv"><span>检索范围</span><strong>${MARKET_LABEL[MARKET]}</strong></div>
       </div>
-      <div style="color:var(--dim);font-size:12px;margin-bottom:6px">该档材料候选（${n}）</div>
-      <div>${(d.materials || []).map(m => `<span class="pill">${esc(m)}</span>`).join('')}</div>
-    </div>`;
+      <div class="note" style="margin-top:16px">严格保持以下收藏品投入数量，同收藏品内的同等级枪皮可互相替换；目标磨损针对分享配方列出的第一个产物，其它可能产物分别计算。</div>
+      <div style="margin-top:8px">${mats.map(m => `<span class="pill">${esc(m)}</span>`).join('')}</div>
+    </section>`;
+}
+
+function marketOfferCell(m, market) {
+  const offer = m.marketOffers?.[market];
+  if (!offer) return '<td class="price"><span class="sub">本次范围内未找到可用挂单</span></td>';
+  const price = m.cheaperMarket === market ? `<strong>${money(offer.price)}</strong>` : money(offer.price);
+  const label = market === 'steam' ? 'Steam' : 'BUFF';
+  return `<td class="price">${price}
+    <div class="sub mono">磨损 ${wearFmt(offer.paintwear)}</div>
+    <div class="sub">${offer.selected ? '已选入炉' : offer.sameWear ? '相同磨损备选' : `参考 · 磨损差 ${offer.delta.toExponential(2)}`}</div>
+    ${offer.url ? `<a class="link" href="${esc(offer.url)}" target="_blank" rel="noopener">${label} 购买</a>` : ''}</td>`;
 }
 
 function recipeCard(r, idx) {
-  const badge = r.exact
-    ? '<span class="badge exact">★ 精确命中</span>'
-    : `<span class="badge near">误差 ${r.score.toExponential(2)}</span>`;
   const fromSteam = r.dataSource === 'steam';
-  const rows = r.materials.map((m, i) => {
-    const nameCell = `<td><b>${esc(m.name || m.marketHashName || '（未知皮肤）')}</b>
-      ${fromSteam && m.marketHashName && m.marketHashName !== m.name ? `<div style="color:var(--dim);font-size:11px">${esc(m.marketHashName)}</div>` : ''}
-      <div style="color:var(--dim);font-size:11.5px">区间 [${m.matRange ? m.matRange.join(', ') : '-'}]</div></td>`;
+  const fromBoth = r.dataSource === 'both';
+  const badge = r.exact
+    ? '<span class="badge exact">精确命中</span>'
+    : `<span class="badge near">误差 ${r.score.toExponential(2)}</span>`;
 
-    // 「仅 Steam」：价格、磨损、购买链接都来自同一笔 Steam 挂单，不显示 BUFF / 比价列
+  const rows = r.materials.map((m, i) => {
+    const name = `<td>${esc(m.name || m.marketHashName || '未知皮肤')}
+      ${(fromSteam || fromBoth) && m.marketHashName && m.marketHashName !== m.name ? `<div class="sub">${esc(m.marketHashName)}</div>` : ''}
+      <div class="sub">${esc(m.collectionName || '')} · 区间 [${m.matRange ? m.matRange.join(', ') : '-'}]</div></td>`;
+
+    if (fromBoth) {
+      return `<tr><td class="mono" style="color:var(--mute)">${i + 1}</td>${name}
+        <td class="mono">${wearFmt(m.paintwear)}<div class="sub">选中 ${m.market === 'steam' ? 'Steam' : 'BUFF'}</div></td>
+        ${marketOfferCell(m, 'buff')}${marketOfferCell(m, 'steam')}</tr>`;
+    }
     if (fromSteam) {
       return `<tr>
-        <td class="mono" style="color:var(--dim)">${i + 1}</td>
-        ${nameCell}
-        <td class="mono">${wear(m.paintwear)}${m.paintseed != null ? `<div style="color:var(--dim);font-size:11px">图案模板 ${esc(m.paintseed)}</div>` : ''}</td>
+        <td class="mono" style="color:var(--mute)">${i + 1}</td>
+        ${name}
+        <td class="mono">${wearFmt(m.paintwear)}${m.paintseed != null ? `<div class="sub">模板 ${esc(m.paintseed)}</div>` : ''}</td>
         <td class="price">${money(m.price)}
-          ${m.url ? `<div><a class="steam" href="${esc(m.url)}" target="_blank" rel="noopener">Steam 购买这一笔</a></div>` : ''}
-          ${m.listingId ? `<div style="color:var(--dim);font-size:11px">挂单 ${esc(m.listingId)}</div>` : ''}
-        </td>
+          ${m.url ? `<div><a class="link" href="${esc(m.url)}" target="_blank" rel="noopener">Steam 购买</a></div>` : ''}</td>
       </tr>`;
     }
 
-    const s = m.steam;
-    let steamCell = '<span style="color:var(--dim)">未查询</span>';
-    if (s && s.ok) {
-      steamCell = s.cheaper
-        ? `<span class="cheap">${s.lowestText} ✓更便宜</span>`
-        : `<span class="dear">${s.lowestText}</span>`;
-    } else if (s && s.error) {
-      steamCell = `<span style="color:var(--dim)">${esc(s.error === 'no_listing' ? '无在售' : s.error)}</span>`;
-    }
-
-    // Steam 逐笔磨损（来自本地解码检视链接，能解出来才有）
-    const sl = m.steamListing;
-    let slCell = '<span style="color:var(--dim)">—</span>';
-    if (sl && sl.ok && sl.best) {
-      const b = sl.best;
-      const close = b.delta < 1e-5;
-      slCell = `<div class="mono" style="color:${close ? 'var(--ok)' : 'var(--acc)'}">${Number(b.floatvalue).toFixed(10)}</div>
-        <div style="color:var(--dim);font-size:11px">偏差 ${b.delta.toExponential(2)} · 可解 ${sl.candidates}/${sl.total} 笔</div>
-        ${b.url ? `<a class="steam" href="${esc(b.url)}" target="_blank" rel="noopener">Steam 买这一笔</a>` : ''}`;
-    } else if (sl && sl.ok) {
-      slCell = '<span style="color:var(--dim)">无解出磨损的挂单</span>';
-    } else if (sl && sl.error) {
-      slCell = `<span style="color:var(--err);font-size:11.5px">${esc(sl.error)}</span>`;
-    }
-
-    const cmin = m.priceMin != null && m.priceMax != null && m.priceMin !== m.priceMax
-      ? `<div style="color:var(--dim);font-size:11px">挂单 ¥${m.priceMin}~${m.priceMax}（${m.candidatesOnMarket} 笔）</div>` : '';
+    const span = m.priceMin != null && m.priceMax != null && m.priceMin !== m.priceMax
+      ? `<div class="sub">挂单 ¥${m.priceMin}~${m.priceMax}（${m.candidatesOnMarket} 笔）</div>` : '';
     return `<tr>
-      <td class="mono" style="color:var(--dim)">${i + 1}</td>
-      ${nameCell}
-      <td class="mono">${wear(m.paintwear)}</td>
-      <td class="price">${money(m.price)}${cmin}
-        ${m.url ? `<div><a class="buy" href="${esc(m.url)}" target="_blank" rel="noopener">BUFF 购买</a></div>` : ''}
-        ${m.inspectUrl ? `<div><a class="insp" href="${esc(m.inspectUrl)}" target="_blank" rel="noopener">检视</a></div>` : ''}
-      </td>
-      <td>${steamCell}</td>
-      <td>${slCell}</td>
+      <td class="mono" style="color:var(--mute)">${i + 1}</td>
+      ${name}
+      <td class="mono">${wearFmt(m.paintwear)}</td>
+      <td class="price">${money(m.price)}${span}
+        ${m.url ? `<div><a class="link gold" href="${esc(m.url)}" target="_blank" rel="noopener">BUFF 购买</a></div>` : ''}
+        ${m.inspectUrl ? `<div><a class="link" href="${esc(m.inspectUrl)}" target="_blank" rel="noopener">检视</a></div>` : ''}</td>
     </tr>`;
   }).join('');
 
-  const optNote = r.optimizeSwaps
-    ? `<div style="color:var(--ok)">已按同款同磨损的等价挂单替换 ${r.optimizeSwaps} 处，省下 ¥${((r.costBeforeOptimize || 0) - r.cost).toFixed(2)}</div>`
+  const head = fromBoth
+    ? '<th>#</th><th>材料</th><th>入炉磨损 / 市场</th><th>BUFF 挂单</th><th>Steam 挂单（含手续费）</th>'
+    : fromSteam
+    ? '<th>#</th><th>材料</th><th>挂单磨损</th><th>Steam 价格</th>'
+    : '<th>#</th><th>材料</th><th>挂单磨损</th><th>BUFF 价格</th>';
+
+  const saved = r.optimizeSwaps
+    ? `<div class="order" style="border-top:none;border-bottom:1px solid var(--line);color:var(--ok)">
+        已替换 ${r.optimizeSwaps} 处等价挂单，省下 ¥${((r.costBeforeOptimize || 0) - r.cost).toFixed(2)}</div>`
     : '';
 
   return `<div class="recipe">
-    <header>
+    <div class="head">
       <b>配方 #${idx + 1}</b>
       ${badge}
-      ${r.dataSource === 'steam' ? '<span class="badge steam-src">数据来源：Steam</span>' : ''}
+      ${fromSteam ? '<span class="badge src">来源 Steam</span>' : ''}
+      ${fromBoth ? '<span class="badge src">来源 BUFF + Steam</span>' : ''}
+      <button class="buy-all" onclick="openBuyPanel(this)" data-items='${esc(JSON.stringify(r.materials.filter(m => m.url).map(m => ({n: m.name || m.marketHashName || '?', w: m.paintwear, p: m.price, u: m.url}))))}'>一键购买 ${r.materials.filter(m => m.url).length} 件</button>
       <div class="sp">
-        <div><span>产物磨损</span><strong>${wear(r.outputWear)}</strong></div>
-        <div><span>${r.dataSource === 'steam' ? 'Steam 材料总价' : 'BUFF 材料总价'}</span><strong>${money(r.cost)}</strong></div>
-        ${r.costIfCheapest != null ? `<div><span>两边挑便宜的</span><strong style="color:var(--ok)">${money(r.costIfCheapest)}</strong></div>` : ''}
-        <div><span>材料数</span><strong>${r.materials.length}</strong></div>
+        <div><span>产物磨损</span><strong>${wearFmt(r.outputWear)}</strong></div>
+        <div><span>${fromBoth ? '选中挂单总价' : fromSteam ? 'Steam 总价' : 'BUFF 总价'}</span><strong>${money(r.cost)}</strong></div>
       </div>
-    </header>
-    ${optNote ? `<div style="padding:8px 15px;background:#0f1a14;font-size:12px;border-bottom:1px solid var(--line)">${optNote}</div>` : ''}
-    <div style="overflow-x:auto">
-      <table>
-        <thead><tr>${fromSteam
-          ? '<th>#</th><th>材料</th><th>Steam 挂单磨损 (float)</th><th>Steam 价格（含手续费）/ 购买</th>'
-          : '<th>#</th><th>材料</th><th>所需磨损 (float32)</th><th>BUFF 价格 / 购买</th><th>Steam 最低价</th><th>Steam 逐笔磨损 / 购买</th>'}</tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
     </div>
-    <div style="padding:11px 15px;background:#101620;color:var(--dim);font-size:12px;font-family:var(--mono);border-top:1px solid var(--line)">
-      按此顺序依次放入炉子：${r.materials.map((_, k) => `<b style="color:var(--acc)">${k + 1}</b>`).join(' → ')}
-    </div>
+    ${saved}
+    ${fromBoth ? '<div class="order">较便宜的价格加粗。产物磨损和购买清单按“已选入炉”挂单计算；其它磨损挂单为参考，替换后需要重新计算。</div>' : ''}
+    ${r.outputs?.length ? `<div class="order">可能产物：${r.outputs.map(o => `${esc(o.name)} · 磨损 ${wearFmt(o.wear)}${Number.isFinite(o.probability) ? ` · ${(o.probability * 100).toFixed(2)}%` : ''}`).join('<br>')}</div>` : ''}
+    <div class="scroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="order">入炉顺序 ${r.materials.map((_, k) => `<b>${k + 1}</b>`).join(' → ')}</div>
   </div>`;
 }
 
 function renderResult(d) {
-  $('srcNote').textContent = d.dataSource === 'steam'
-    ? '挂单、精确磨损与价格来自 Steam 社区市场（磨损区间参考 BUFF）'
-    : '挂单与精确磨损来自 BUFF163';
   const ie = d.ieee754 || {};
   const ieBox = ie.exact
-    ? `<div class="good-box">你输入的磨损在 IEEE754 单精度下<b>可精确表示</b>。</div>`
-    : `<div class="warn">你输入的 ${esc(d.targetWear)} 在 IEEE754 单精度下<b>不存在</b>，
-        游戏里会落到 <b>${esc(ie.asFloat32)}</b>（间距约 ${Number(ie.spacing).toExponential(3)}）。
-        下面按这个可表示值求解。</div>`;
+    ? '<div class="msg good">目标磨损在 IEEE754 单精度下可精确表示。</div>'
+    : `<div class="msg warn">${esc(d.targetWear)} 在单精度下不存在，游戏里落到 ${esc(ie.asFloat32)}（间距 ${Number(ie.spacing).toExponential(3)}），下面按该值求解。</div>`;
 
   const skipped = (d.skippedRanges || []).length
-    ? `<div class="hint">已跳过 ${d.skippedRanges.length} 个不能用的磨损档位：${d.skippedRanges.map(r => `[${r[0]},${r[1]}]`).join(' ')}</div>`
+    ? `<div class="note">已跳过 ${d.skippedRanges.length} 个不可用磨损档：${d.skippedRanges.map(r => `[${r[0]},${r[1]}]`).join(' ')}</div>`
     : '';
 
   $('resultBox').innerHTML = `
-    <div class="panel">
-      <h2>搜索概要</h2>
-      ${d.dataSourceNote ? `<div class="${d.dataSource === 'steam' ? 'good-box' : 'warn'}">
-        <b>数据来源：</b>${d.dataSource === 'steam' ? 'Steam' : 'BUFF'} —— ${esc(d.dataSourceNote)}</div>` : ''}
+    <span class="sect-label" id="summary">搜索概要</span>
+    <section class="card">
       ${ieBox}
-      <div class="kpis" style="margin-bottom:10px">
-        <div class="kv"><span>数据来源</span><strong>${d.dataSource === 'steam' ? 'Steam（挂单+磨损都来自 Steam）' : 'BUFF'}</strong></div>
-        <div class="kv"><span>收藏品</span><strong>${esc(d.collection)}</strong></div>
-        <div class="kv"><span>使用档位</span><strong>${esc(d.grade || '-')}</strong></div>
-        <div class="kv"><span>产物/材料区间</span><strong>[${(d.outRange || []).join(', ')}]</strong></div>
-        <div class="kv"><span>材料磨损带</span><strong>[${(d.band || []).map(v => Number(v).toFixed(4)).join(', ')}]</strong></div>
+      ${d.dataSourceNote ? `<div class="msg ${d.dataSource === 'steam' ? 'good' : 'warn'}">${esc(d.dataSourceNote)}</div>` : ''}
+      <div class="kpis">
+        <div class="kv"><span>数据来源</span><strong>${d.dataSource === 'both' ? 'BUFF + Steam' : d.dataSource === 'steam' ? 'Steam' : 'BUFF'}</strong></div>
+        <div class="kv"><span>收藏品 / 档位</span><strong>${esc(d.collection)} · ${esc(d.grade || '-')}</strong></div>
+        <div class="kv"><span>产物区间</span><strong>[${(d.outRange || []).join(', ')}]</strong></div>
+        <div class="kv"><span>目标产物</span><strong>${esc(d.targetOutput || '-')}</strong></div>
         <div class="kv"><span>候选挂单</span><strong>${d.poolSize}</strong></div>
-        <div class="kv"><span>皮肤数</span><strong>${d.materialCount}</strong></div>
-        <div class="kv"><span>精确命中</span><strong>${d.exactFound ? '是 ✓' : '否'}</strong></div>
+        ${d.marketCounts && d.dataSource === 'both' ? `<div class="kv"><span>BUFF / Steam 候选</span><strong>${d.marketCounts.buff} / ${d.marketCounts.steam}</strong></div>` : ''}
+        <div class="kv ${d.exactFound ? 'good' : ''}"><span>精确命中</span><strong>${d.exactFound ? '是' : '否'}</strong></div>
         <div class="kv"><span>最优误差</span><strong>${d.bestScore != null ? Number(d.bestScore).toExponential(2) : '-'}</strong></div>
       </div>
       ${skipped}
-    </div>
-    <div class="panel" style="padding-bottom:6px">
-      <h2>推荐配方（共 ${d.recipes.length} 组）</h2>
-      ${d.recipes.map(recipeCard).join('') || '<div class="hint">没有找到可用组合。</div>'}
-    </div>`;
+      ${(d.collectionSpecs || []).length ? `<div class="note" style="margin-top:16px">固定收藏品数量：${d.collectionSpecs.map(m => `${esc(m.collection)} × ${m.count}`).join('；')}</div>` : ''}
+      ${(d.collectionBands || []).length ? `<details style="margin-top:16px"><summary>查看 ${d.collectionBands.length} 种候选枪皮的磨损搜索范围</summary><div class="note">${d.collectionBands.map(m => `${esc(m.collection)} · ${esc(m.name)}：材料目标磨损 ${wearFmt(m.targetWear)}，搜索 [${m.band.map(v => Number(v).toFixed(6)).join(', ')}]`).join('<br>')}</div></details>` : ''}
+      ${(d.materialBands || []).length ? `<div class="note" style="margin-top:16px">${d.materialBands.map(m => `${esc(m.name)} × ${m.count}：材料目标磨损 ${wearFmt(m.targetWear)}，搜索 [${m.band.map(v => Number(v).toFixed(6)).join(', ')}]`).join('<br>')}</div>` : ''}
+    </section>
+    <span class="sect-label" id="recipes">推荐配方 ${d.recipes.length} 组</span>
+    <section class="card" style="padding:0;border:none">
+      ${d.recipes.map(recipeCard).join('') || '<div class="note" style="padding:24px">没有找到可用组合。</div>'}
+    </section>`;
 }
 
+let qualitySid = null, qualityOverrideSid = null, qualityInputCurrent = null;
+let qualityVersion = 0, qualityController = null, qualityTimer = null;
+function qualityInputSid() {
+  const text = $('link').value.trim();
+  return /^[0-9a-f]{16}$/i.test(text) ? text.toLowerCase() : text.match(/sid[=/]([0-9a-f]{8,64})/i)?.[1].toLowerCase() || null;
+}
+async function loadRecipeQuality(sid, version) {
+  if (!sid) return;
+  const controller = new AbortController();
+  qualityController = controller;
+  try {
+    const response = await fetch('/api/recipe?' + new URLSearchParams({ url: sid }), { signal: controller.signal });
+    const data = await response.json();
+    if (version !== qualityVersion || sid !== qualityInputSid()) return;
+    if (!data.ok) throw new Error(data.message || '配方读取失败');
+    qualitySid = sid;
+    if (qualityOverrideSid !== sid) {
+      $('stattrak').checked = !!data.statTrak;
+      $('qualityNote').textContent = `链接配方为${data.statTrak ? '暗金' : '普通'}，已自动设置；可手动切换。`;
+    }
+  } catch (e) {
+    if (!controller.signal.aborted && version === qualityVersion && qualityOverrideSid !== sid) {
+      $('qualityNote').textContent = '暂未读取到配方品质；开始搜索时将按链接默认品质，也可手动选择。';
+    }
+  }
+}
+function qualityInputChanged() {
+  const sid = qualityInputSid();
+  if (sid === qualityInputCurrent && (qualitySid === sid || qualityOverrideSid === sid)) return;
+  if (sid !== qualityInputCurrent) {
+    qualityInputCurrent = sid; qualitySid = null; qualityOverrideSid = null;
+    $('stattrak').checked = false;
+  }
+  qualityController?.abort();
+  clearTimeout(qualityTimer);
+  const version = ++qualityVersion;
+  $('qualityNote').textContent = sid ? '正在读取链接的暗金品质 ...' : '请输入有效分享链接或 sid，读取后自动跟随配方品质。';
+  qualityTimer = setTimeout(() => loadRecipeQuality(sid, version), 400);
+}
+$('link').addEventListener('input', qualityInputChanged);
+$('stattrak').addEventListener('change', () => {
+  qualityOverrideSid = qualityInputSid();
+  $('qualityNote').textContent = `已手动选择${$('stattrak').checked ? '暗金' : '普通'}搜索；更换配方后重新跟随链接。`;
+});
+
 let MARKET = 'buff';
+let activeES = null;
+let activeTaskId = null;
+
+async function stopSearch() {
+  const taskId = activeTaskId;
+  if (activeES) { activeES.close(); activeES = null; }
+  activeTaskId = null;
+  $('go').disabled = true;
+  $('stop').style.display = 'none';
+  statusLine('正在停止搜索 ...', 'act');
+  try {
+    if (taskId) await fetch('/api/cancel', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ taskId }), keepalive: true,
+    });
+  } catch {
+    // SSE 已关闭，服务端也会在连接断开时取消对应任务。
+  }
+  $('go').disabled = false;
+  $('stattrak').disabled = false;
+  $('stop').style.display = 'none';
+  statusLine('已手动停止搜索', 'bad');
+}
+
+$('stop').onclick = stopSearch;
 document.querySelectorAll('#marketSeg button').forEach(b => {
   b.onclick = () => {
     document.querySelectorAll('#marketSeg button').forEach(x => x.classList.remove('on'));
     b.classList.add('on');
     MARKET = b.dataset.m;
+    $('marketNote').textContent = MARKET_NOTE[MARKET];
+  };
+});
+document.querySelectorAll('nav a').forEach(a => {
+  a.onclick = () => {
+    document.querySelectorAll('nav a').forEach(x => x.classList.remove('on'));
+    a.classList.add('on');
   };
 });
 
 function setMsg(text, cls = '') {
   const el = $('saveMsg');
   el.textContent = text;
-  el.style.color = cls === 'bad' ? 'var(--err)' : cls === 'ok' ? 'var(--ok)' : 'var(--dim)';
+  el.style.color = cls === 'bad' ? 'var(--err)' : cls === 'ok' ? 'var(--ok)' : 'var(--mute)';
 }
 
 $('saveCookies').onclick = async () => {
   const buff = $('buffCookie').value.trim();
-  const steam = $('steamCookie').value.trim();
-  const token = $('csfloatToken').value.trim();
-  if (!buff && !steam && !token) { setMsg('三项都空着，没有可保存的内容。', 'bad'); return; }
+  const steamLoginSecure = $('steamLoginSecure').value.trim();
+  if (!buff && !steamLoginSecure) { setMsg('请填写 BUFF Cookie 或 steamLoginSecure 的值。', 'bad'); return; }
+  $('saveCookies').disabled = true;
   setMsg('保存并验证中 ...');
   $('verifyBox').innerHTML = '';
   try {
     const r = await fetch('/api/cookies', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ buff, steam, csfloatToken: token }),
+      body: JSON.stringify({ buff, steamLoginSecure, proxy: $('proxy').value.trim(), insecure: $('insecure').checked }),
     });
     const j = await r.json();
     if (!j.ok) { setMsg('保存失败：' + (j.error || '未知'), 'bad'); return; }
     const parts = [];
-    if (j.buff != null) parts.push(`BUFF ${j.buff} 条`);
-    if (j.steam != null) parts.push(`Steam ${j.steam} 条`);
-    setMsg('已保存：' + parts.join('，'), 'ok');
-
-    // 把验证结果渲染出来
-    let html = '';
-    const sv = j.steamVerify;
-    if (sv) {
-      html += `<div class="${sv.ok ? 'good-box' : 'bad-box'}"><b>Steam 登录态：</b>${esc(sv.message)}
-        ${sv.steamId ? `<br>SteamID64：<code>${esc(sv.steamId)}</code>` : ''}
-        ${sv.location ? `<br>Steam 跳转到：<code>${esc(sv.location)}</code>` : ''}</div>`;
-    }
-    const cv = j.csfloatVerify;
-    if (cv) {
-      html += `<div class="${cv.ok ? 'good-box' : 'warn'}"><b>CSFloat 令牌：</b>${esc(cv.message)}</div>`;
-    }
-    $('verifyBox').innerHTML = html;
-    refreshCookieState();
+    if (j.buff != null) parts.push('BUFF Cookie');
+    if (j.steam != null) parts.push('steamLoginSecure');
+    const checks = [['BUFF', j.buffVerify], ['Steam', j.steamVerify]].filter(([, v]) => v);
+    const verified = checks.length > 0 && checks.every(([, v]) => v.ok);
+    setMsg('已保存 ' + parts.join('，') + (verified ? '；验证通过' : '；请查看下方验证结果'), verified ? 'ok' : '');
+    $('verifyBox').innerHTML = checks.map(([label, v]) => {
+      const invalid = ['invalid_format', 'expired', 'not_logged_in', 'account_mismatch'].includes(v.reason);
+      return `<div class="msg ${v.ok ? 'good' : invalid ? 'bad' : 'warn'}">${esc(label)}：${esc(v.message)}
+        ${v.steamId ? `<br>SteamID64 <code>${esc(v.steamId)}</code>` : ''}</div>`;
+    }).join('');
+    $('buffCookie').value = '';
+    $('steamLoginSecure').value = '';
+    refreshState();
   } catch (e) { setMsg('保存失败：' + e.message, 'bad'); }
+  finally { $('saveCookies').disabled = false; }
 };
 
-async function refreshCookieState() {
+async function refreshState() {
   try {
     const h = await (await fetch('/api/health')).json();
-    $('buffState').textContent = h.buffCookies ? `（已保存 ${h.buffCookies} 条）` : '（未设置）';
-    $('steamState').textContent = h.steamCookies ? `（已保存 ${h.steamCookies} 条）` : '（未设置，可选）';
-    if (!h.buffCookies) {
-      statusLine('提示：BUFF 登录态未设置。请在「④ 登录态设置」里粘贴 BUFF Cookie 并保存。', 'bad');
-    }
-  } catch { /* 忽略 */ }
+    $('buffState').textContent = h.buffCookies ? `${h.buffCookies} 条` : '未设置';
+    $('steamState').textContent = h.steamLoginSecureSet ? '已设置' : '未设置';
+    if (!h.buffCookies && MARKET !== 'steam') statusLine('BUFF 登录态未设置，使用 BUFF 前请展开「代理与登录态」粘贴完整 Cookie 请求头。', 'bad');
+    else statusLine('服务就绪；登录态是否可用请以在线验证结果为准。', 'ok');
+  } catch { statusLine('无法连接本地服务', 'bad'); }
 }
 
 $('go').onclick = () => {
   const link = $('link').value.trim();
   const w = $('wear').value.trim();
-  if (!link) { alert('请填写 CS2UP 配方分享链接'); return; }
-  if (!w || !(Number(w) > 0 && Number(w) < 1)) { alert('请填写 0 到 1 之间的产物磨损值'); return; }
-
+  if (!link) { statusLine('请填写 CS2UP 配方分享链接', 'bad'); return; }
+  if (!w || !(Number(w) > 0 && Number(w) < 1)) { statusLine('目标磨损需在 0 到 1 之间', 'bad'); return; }
   reset();
   $('go').disabled = true;
-  statusLine(`连接本地服务 ...（检索范围：${MARKET}）`, 'act');
-
+  $('stop').style.display = '';
+  statusLine(`连接本地服务（${MARKET_LABEL[MARKET]}）`, 'act');
+  $('stattrak').disabled = true;
   const qs = new URLSearchParams({
     url: link, wear: w, band: $('band').value,
     interval: $('interval').value, market: MARKET,
     insecure: $('insecure').checked ? '1' : '0',
   });
+  const qualitySearchSid = qualityInputSid();
+  if (qualitySearchSid && (qualitySid === qualitySearchSid || qualityOverrideSid === qualitySearchSid)) {
+    qs.set('stattrak', $('stattrak').checked ? '1' : '0');
+  }
+  activeTaskId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+  qs.set('task_id', activeTaskId);
   const px = $('proxy').value.trim();
   if (px) qs.set('proxy', px);
   const es = new EventSource('/api/hunt?' + qs.toString());
-
-  es.addEventListener('stage', e => statusLine(JSON.parse(e.data).message, 'act'));
-  es.addEventListener('progress', e => statusLine(JSON.parse(e.data).message));
-  es.addEventListener('located', e => {
+  activeES = es;
+  const listen = (type, handler) => es.addEventListener(type, e => {
+    if (activeES === es) handler(e);
+  });
+  const finish = () => {
+    es.close();
+    if (activeES !== es) return;
+    activeES = null; activeTaskId = null;
+    $('go').disabled = false; $('stop').style.display = 'none';
+    $('stattrak').disabled = false;
+  };
+  listen('stage', e => statusLine(JSON.parse(e.data).message, 'act'));
+  listen('progress', e => statusLine(JSON.parse(e.data).message));
+  listen('located', e => {
     const d = JSON.parse(e.data);
-    statusLine(`已定位收藏品：${d.collection}（${d.grade}，${d.materialCount} 个皮肤）`, 'ok');
+    if (d.sid === qualityInputSid() && qualityOverrideSid !== d.sid) {
+      qualitySid = d.sid;
+      $('stattrak').checked = !!d.statTrak;
+      $('qualityNote').textContent = `本次搜索${d.statTrak ? '暗金' : '普通'}材料。`;
+    }
+    statusLine(`已读取收藏品数量比例：${(d.collectionSpecs || []).map(m => `${m.collection} × ${m.count}`).join('；')}（${d.grade}）`, 'ok');
+    if (d.collections?.length > 1) statusLine(`配方含 ${d.collections.join('、')}，本次搜索「${d.collection}」`);
     renderLocated(d);
   });
-  es.addEventListener('result', e => {
+  listen('result', e => {
     const d = JSON.parse(e.data);
     renderResult(d);
-    statusLine(d.exactFound ? '搜索完成：找到精确命中 ✓' : '搜索完成（未精确命中，见最优误差）', 'ok');
+    statusLine(d.exactFound ? '搜索完成，已精确命中' : '搜索完成，未精确命中（见最优误差）', 'ok');
   });
-  es.addEventListener('done', e => {
-    const d = JSON.parse(e.data);
-    statusLine(`全部完成，耗时 ${(d.elapsedMs / 1000).toFixed(1)} 秒。`, 'ok');
-    es.close(); $('go').disabled = false;
+  listen('done', e => {
+    statusLine(`全部完成，耗时 ${(JSON.parse(e.data).elapsedMs / 1000).toFixed(1)} 秒`, 'ok');
+    finish();
   });
-  es.addEventListener('error', e => {
+  listen('error', e => {
     let msg = '连接中断';
     try { msg = JSON.parse(e.data).message || msg; } catch {}
     statusLine('错误：' + msg, 'bad');
-    es.close(); $('go').disabled = false;
+    finish();
   });
-  es.onerror = () => { if (es.readyState === EventSource.CLOSED) $('go').disabled = false; };
+  es.onerror = () => { if (es.readyState === EventSource.CLOSED) finish(); };
 };
 
-refreshCookieState();
-fetch('/api/health').then(r => r.json()).then(d => {
-  if (!d.buffCookies) {
-    statusLine('警告：BUFF 登录态缺失，搜索会失败。请运行 scripts\\set-cookies.ps1 -Site buff', 'bad');
-  } else {
-    statusLine(`本地服务就绪，BUFF 登录态 ${d.buffCookies} 条 cookie ✓`, 'ok');
+function openBuyPanel(btn) {
+  let items;
+  try { items = JSON.parse(btn.dataset.items || '[]'); } catch { items = []; }
+  if (!items.length) return;
+  const list = items.map((m, i) => `<li>
+    <span class="idx">${i + 1}</span>
+    <div class="info">
+      <div class="nm">${esc(m.n)}</div>
+      <div class="fl">${wearFmt(m.w)}${m.p != null ? ` · ${money(m.p)}` : ''}</div>
+    </div>
+    <div class="go"><a href="${esc(m.u)}" target="_blank" rel="noopener" onclick="this.classList.add('visited')">购买</a></div>
+  </li>`).join('');
+  $('buyPanel').innerHTML = `
+    <h3>购买清单（${items.length} 件）</h3>
+    <ul class="buy-list">${list}</ul>
+    <div class="buy-bar">
+      <button onclick="copyBuyUrls()">复制全部链接</button>
+      <button onclick="openNextUnvisited()">打开下一个</button>
+      <button class="ghost" onclick="closeBuyPanel()">关闭</button>
+    </div>`;
+  $('buyOverlay').classList.add('open');
+  $('buyOverlay')._items = items;
+  $('buyOverlay')._opened = new Set();
+}
+
+function closeBuyPanel() {
+  $('buyOverlay').classList.remove('open');
+}
+
+function copyBuyUrls() {
+  const items = $('buyOverlay')._items || [];
+  const text = items.map((m, i) => `${i + 1}. ${m.n}\n   ${m.u}`).join('\n\n');
+  navigator.clipboard.writeText(text).then(
+    () => { const b = event.target; b.textContent = '已复制'; setTimeout(() => b.textContent = '复制全部链接', 2000); },
+    () => { /* 降级：选中一个临时 textarea */
+      const t = document.createElement('textarea');
+      t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy');
+      document.body.removeChild(t);
+    }
+  );
+}
+
+function openNextUnvisited() {
+  const items = $('buyOverlay')._items || [];
+  const opened = $('buyOverlay')._opened || new Set();
+  const links = $('buyPanel').querySelectorAll('.buy-list .go a');
+  for (let i = 0; i < items.length; i++) {
+    if (!opened.has(i)) {
+      opened.add(i);
+      $('buyOverlay')._opened = opened;
+      if (links[i]) links[i].classList.add('visited');
+      window.open(items[i].u, '_blank', 'noopener');
+      return;
+    }
   }
-}).catch(() => statusLine('无法连接本地服务', 'bad'));
+}
+
+refreshState();
+qualityInputChanged();
 </script>
 </body>
 </html>

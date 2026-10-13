@@ -7,9 +7,9 @@
  * **会忽略 rarity**（三种 rarity 返回完全相同的 186 条），所以必须自己按稀有度筛。
  * BUFF 的列表返回里也不带 itemset/rarity 标签，靠它反查反而更绕。
  *
- * 注意：本库里的 min/max 是**整个皮肤的磨损范围**，与 BUFF 的 paintwear_range
- * 可能不一致（实测 AWP | 可燃冰 在本库里是 [0,1]，BUFF 是 [0.15,0.38]）。
- * 因此**磨损区间一律以 BUFF 为准**，本库只用来做「收藏品 → 皮肤清单 + 稀有度」的索引。
+ * 本库的 min/max 是整个皮肤的完整磨损范围，严格配方搜索用它归一化材料及产物。
+ * BUFF 的 paintwear_range 可能只对应商品的外观档位（例如久经沙场 [0.15,0.38]），
+ * 不能把档位区间当作完整皮肤区间参与炼金计算。
  */
 
 import fs from 'node:fs';
@@ -23,6 +23,25 @@ export const GRADE_CN = {
   consumer: '消费级', industrial: '工业级', milspec: '军规级',
   restricted: '受限级', classified: '保密级', covert: '隐秘级', ancient: '金色传说',
 };
+
+// CS2UP 使用 Steam/英文收藏品名，本地材料库使用中文名。新旧译名会并存，
+// 因此集中维护别名，避免每条配方都依赖皮肤名称反查。
+export const COLLECTION_ALIASES = {
+  'the revolution collection': '变革收藏品',
+  'the genesis collection': ['创世纪收藏品'],
+  'the fracture collection': '裂空武器箱收藏品',
+  'the shattered web collection': '“裂网大行动”收藏品',
+  'the dead hand collection': '毁灭之手终端机',
+  'the dead hand terminal': '毁灭之手终端机',
+};
+
+function normalizeCollectionLabel(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[“”"'‘’]/g, '')
+    .replace(/[\s·]/g, '')
+    .replace(/(collection|收藏品|终端机)$/i, '');
+}
 
 let _db = null;
 
@@ -103,7 +122,9 @@ export function findInDbByBuffName(buffName) {
   let hit = db.find(m => normalizeName(m.name) === n);
   if (hit) return hit;
   // 再放宽：去掉 StatTrak 前缀等差异
-  const strip = s => normalizeName(s).replace(/stattrak™?|纪念品|souvenir/g, '').replace(/\s+/g, ' ').trim();
+  const strip = s => normalizeName(s)
+    .replace(/\(\s*stattrak™?\s*\)/g, '')
+    .replace(/stattrak™?|纪念品|souvenir/g, '').replace(/\s+/g, '').trim();
   const n2 = strip(buffName);
   hit = db.find(m => strip(m.name) === n2);
   return hit || null;
@@ -153,6 +174,18 @@ export function findCollectionName(hint) {
   const cols = listCollections();
   const exact = cols.find(c => c === hint);
   if (exact) return exact;
+  const alias = COLLECTION_ALIASES[String(hint).trim().toLowerCase()];
+  if (alias) {
+    const candidates = Array.isArray(alias) ? alias : [alias];
+    for (const candidate of candidates) {
+      const hit = cols.find(c => normalizeCollectionLabel(c) === normalizeCollectionLabel(candidate));
+      if (hit) return hit;
+    }
+  }
+  // 同一收藏品在数据源之间可能只差引号、空格或“收藏品/终端机”后缀。
+  const normalizedHint = normalizeCollectionLabel(hint);
+  const normalized = cols.find(c => normalizeCollectionLabel(c) === normalizedHint);
+  if (normalized) return normalized;
   const loose = cols.find(c => c.includes(hint) || hint.includes(c));
   return loose || null;
 }

@@ -100,10 +100,15 @@ export function outputWear(materials, outMin, outMax) {
 /**
  * 已知归一化值总和时的产物磨损（求解器热路径）。
  * 逐字对应 script.js:1323-1324。
+ * 产物区间先落到 f32：站点 script.js:1201-1202 读取时就是
+ *   max_wear = G(Number(input)), min_wear = G(Number(input))
+ * 漏掉这一步时，0.1~0.7 这类区间约七成结果会差 1 个 ULP。
  */
 export function outputWearFromNormalizedSum(normSum, count, outMin, outMax) {
+  const mn = f32(outMin);
+  const mx = f32(outMax);
   const avgNormalized = f32(f32(normSum) / f32(count));
-  return f32(outMin + f32(avgNormalized * f32(outMax - outMin)));
+  return f32(mn + f32(avgNormalized * f32(mx - mn)));
 }
 
 /**
@@ -240,12 +245,15 @@ export function meetInTheMiddle(normPool, count, wantSum, cfg = {}) {
  *   maxCollections?: number            —— 混收藏品模式下最多涉及几个收藏品，
  *       在**搜索阶段**就强制（而不是事后过滤，避免结果被全部丢掉）。
  *   seedIndices?: number[]             —— 指定初始组合（用于“固定已有材料”）
+ *   candidateGroups?: string[] / groupCounts?: object —— 每种材料的严格数量约束。
+ *       起点、单点替换及 2 换 2 都保持每组数量，不以其它枪皮补足。
  */
 export function solveCombinations(normPool, cfg) {
   const {
     count = 10, outMin, outMax, targetOut,
     tries = 4000, maxResults = 40, timeBudgetMs = 8000,
     collections = null, maxCollections = null, seedIndices = null,
+    candidateGroups = null, groupCounts = null,
   } = cfg;
 
   const N = normPool.length;
@@ -255,7 +263,14 @@ export function solveCombinations(normPool, cfg) {
   }
 
   // 混收藏品模式下，预先把同收藏品的候选下标分组，替换时只在自己的组里找
-  const groupOf = collections ? collections.map(c => c ?? '__none__') : null;
+  const groupOf = candidateGroups || (collections ? collections.map(c => c ?? '__none__') : null);
+  const quotas = groupCounts ? new Map(Object.entries(groupCounts)) : null;
+  const noResults = reason => ({ results: [], reason, poolSize: N, exactFound: false, bestScore: null, elapsedMs: 0, wantSum });
+  if (quotas && (!candidateGroups || candidateGroups.length !== N ||
+      [...quotas.values()].some(n => !Number.isInteger(n) || n <= 0) ||
+      [...quotas.values()].reduce((a, n) => a + n, 0) !== count)) {
+    return noResults('invalid_group_counts');
+  }
   const groupMembers = new Map();
   if (groupOf) {
     for (let i = 0; i < N; i++) {
@@ -264,11 +279,14 @@ export function solveCombinations(normPool, cfg) {
       groupMembers.get(g).push(i);
     }
   }
+  if (quotas && [...quotas].some(([g, n]) => (groupMembers.get(g)?.length || 0) < n)) {
+    return noResults('not_enough_group_candidates');
+  }
   // 参与搜索的收藏品组：受 maxCollections 限制，按候选数从多到少取
   const allGroups = groupOf
     ? [...groupMembers.keys()].sort((a, b) => groupMembers.get(b).length - groupMembers.get(a).length)
     : null;
-  const allowedGroups = (allGroups && maxCollections && maxCollections > 0)
+  const allowedGroups = quotas ? new Set(quotas.keys()) : (allGroups && maxCollections && maxCollections > 0)
     ? new Set(allGroups.slice(0, maxCollections))
     : (allGroups ? new Set(allGroups) : null);
   // 允许参与的候选下标（混收藏品模式下会剔除超限收藏品）
@@ -287,6 +305,8 @@ export function solveCombinations(normPool, cfg) {
   const seen = new Set();
   const keyOf = idx => [...idx].sort((a, b) => a - b).join(',');
   const pushIfNew = (idx, sum) => {
+    if (quotas && (idx.length !== count || new Set(idx).size !== count ||
+        [...quotas].some(([g, n]) => idx.filter(i => groupOf[i] === g).length !== n))) return false;
     const k = keyOf(idx);
     if (seen.has(k)) return false;
     seen.add(k);
@@ -299,7 +319,23 @@ export function solveCombinations(normPool, cfg) {
     (a, b) => Math.abs(normPool[a] - targetAvg) - Math.abs(normPool[b] - targetAvg)
   );
 
+  const quotaSeed = random => {
+    const idx = [];
+    for (const [group, needed] of quotas) {
+      const members = groupMembers.get(group).slice();
+      if (random) {
+        for (let i = members.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [members[i], members[j]] = [members[j], members[i]];
+        }
+      } else members.sort((a, b) => Math.abs(normPool[a] - targetAvg) - Math.abs(normPool[b] - targetAvg));
+      idx.push(...members.slice(0, needed));
+    }
+    return idx;
+  };
+
   const greedySeed = () => {
+    if (quotas) return quotaSeed(false);
     if (seedIndices && seedIndices.length) {
       // 固定种子：保留已指定的材料，其余按“离目标均值最近”补足
       const fixed = new Set(seedIndices);
@@ -328,6 +364,7 @@ export function solveCombinations(normPool, cfg) {
   };
 
   const randomSeed = () => {
+    if (quotas) return quotaSeed(true);
     const idx = []; const used = new Set();
     if (seedIndices && seedIndices.length) {
       for (const s of seedIndices.slice(0, count)) { idx.push(s); used.add(s); }

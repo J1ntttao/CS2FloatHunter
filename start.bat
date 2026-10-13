@@ -1,6 +1,7 @@
 @echo off
 chcp 65001 >nul
 setlocal EnableExtensions
+set "EXIT_CODE=1"
 title CS2 磨损猎人
 cd /d "%~dp0"
 
@@ -37,18 +38,28 @@ node -e "fetch(process.argv[1]+'/api/health').then(r=>process.exit(r.ok?0:1),()=
 if not errorlevel 1 (
   echo [ok] 服务已在运行，正在打开 %URL%
   start "" "%URL%"
-  exit /b 0
+  set "EXIT_CODE=0"
+  goto :done
 )
 
 rem 4) 启动服务，2 秒后自动打开浏览器
 echo [..] 正在启动服务：%URL%   （关闭此窗口或按 Ctrl+C 停止）
 echo.
-start "" /b powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 2; Start-Process '%URL%'"
-node src\web\server.mjs
-if errorlevel 1 goto :fail
-exit /b 0
+start "" /b cmd /c "timeout /t 2 /nobreak >nul & start "" "%URL%""
+node --watch src\web\server.mjs
+
+set "EXIT_CODE=%errorlevel%"
+echo.
+if "%EXIT_CODE%"=="0" (
+  echo [!] 服务已停止。
+) else (
+  echo [x] 服务异常退出，退出码：%EXIT_CODE%
+)
+goto :fail
 
 :fail
+:done
 echo.
-pause
-exit /b 1
+echo 按任意键关闭此窗口...
+pause >nul
+exit /b %EXIT_CODE%

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "CS2 目标磨损炼金助手：输入目标磨损值，从 Buff / 悠悠有品 等市场检索符合磨损的材料，求解 10 把材料的精准配方，并生成可视化网页。",
+  "description": "CS2 目标磨损炼金助手：输入目标磨损值，从 Buff 等市场检索符合磨损的材料，求解 10 把材料的精准配方，并生成可视化网页。",
   "engines": {
     "node": ">=22.5.0"
   },
@@ -11,9 +11,9 @@
     "export-cookies": "node scripts/export-cookies.mjs",
     "doctor": "node scripts/doctor.mjs",
     "hunt": "node src/cli.mjs",
-    "web": "node src/web/server.mjs",
-    "start": "node src/web/server.mjs",
-    "test": "node tests/test-float.mjs && node tests/test-inspect.mjs && node tests/test-vs-site.mjs && node tests/test-hunt-steam.mjs"
+    "web": "node --watch src/web/server.mjs",
+    "start": "node --watch src/web/server.mjs",
+    "test": "node tests/test-float.mjs && node tests/test-inspect.mjs && node tests/test-vs-site.mjs && node tests/test-hunt-steam.mjs && node tests/test-recipe-hunt.mjs && node tests/test-dual-market.mjs && node tests/test-market-access.mjs && node tests/test-collection-location.mjs && node tests/test-search-tasks.mjs && node tests/test-login-validation.mjs"
   },
   "dependencies": {}
 }

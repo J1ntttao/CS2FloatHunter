@@ -1,0 +1,187 @@
+{
+  "created_at": 1791879741585,
+  "title": "变革武器箱 X 封装的创世终端机",
+  "subtitle": "普通",
+  "recipe_line": "9打1｜受限级→保密级",
+  "matchup": "9打1",
+  "input_rarity_label": "受限级",
+  "output_rarity_label": "保密级",
+  "stattrak": false,
+  "metrics": {
+    "cost": 19.65,
+    "expected": 17.807333333333332,
+    "roi": -0.09377438507209498,
+    "break_even_rate": 0.1,
+    "eco_break_even_rate": 0.1,
+    "max_output": 29,
+    "max_profit": 9.350000000000001
+  },
+  "materials": [
+    {
+      "key": "input-0-0",
+      "name": "R8 Revolver | Banana Cannon (Well-Worn)",
+      "cn": "R8 左轮手枪 | 蕉农炮 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "unit_price": 1.89,
+      "wear": 0.444,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLjm4Dv8TRe_c2pe5t_eM-RD2mRz-9JveRtRjy-2xwlsWmGmdmhJ3uROAJxA8dzQ-Ff5kGwx9XlNrm2tg3ZgoNFny2q3XtXrnE8X2QHmf8%2F160fx160f"
+    },
+    {
+      "key": "input-0-1",
+      "name": "R8 Revolver | Banana Cannon (Well-Worn)",
+      "cn": "R8 左轮手枪 | 蕉农炮 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "unit_price": 1.89,
+      "wear": 0.444,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLjm4Dv8TRe_c2pe5t_eM-RD2mRz-9JveRtRjy-2xwlsWmGmdmhJ3uROAJxA8dzQ-Ff5kGwx9XlNrm2tg3ZgoNFny2q3XtXrnE8X2QHmf8%2F160fx160f"
+    },
+    {
+      "key": "input-0-2",
+      "name": "R8 Revolver | Banana Cannon (Well-Worn)",
+      "cn": "R8 左轮手枪 | 蕉农炮 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "unit_price": 1.89,
+      "wear": 0.444,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLjm4Dv8TRe_c2pe5t_eM-RD2mRz-9JveRtRjy-2xwlsWmGmdmhJ3uROAJxA8dzQ-Ff5kGwx9XlNrm2tg3ZgoNFny2q3XtXrnE8X2QHmf8%2F160fx160f"
+    },
+    {
+      "key": "input-0-3",
+      "name": "R8 Revolver | Banana Cannon (Well-Worn)",
+      "cn": "R8 左轮手枪 | 蕉农炮 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "unit_price": 1.89,
+      "wear": 0.444,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLjm4Dv8TRe_c2pe5t_eM-RD2mRz-9JveRtRjy-2xwlsWmGmdmhJ3uROAJxA8dzQ-Ff5kGwx9XlNrm2tg3ZgoNFny2q3XtXrnE8X2QHmf8%2F160fx160f"
+    },
+    {
+      "key": "input-0-4",
+      "name": "R8 Revolver | Banana Cannon (Well-Worn)",
+      "cn": "R8 左轮手枪 | 蕉农炮 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "unit_price": 1.89,
+      "wear": 0.444,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLjm4Dv8TRe_c2pe5t_eM-RD2mRz-9JveRtRjy-2xwlsWmGmdmhJ3uROAJxA8dzQ-Ff5kGwx9XlNrm2tg3ZgoNFny2q3XtXrnE8X2QHmf8%2F160fx160f"
+    },
+    {
+      "key": "input-0-5",
+      "name": "R8 Revolver | Banana Cannon (Well-Worn)",
+      "cn": "R8 左轮手枪 | 蕉农炮 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "unit_price": 1.89,
+      "wear": 0.444,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLjm4Dv8TRe_c2pe5t_eM-RD2mRz-9JveRtRjy-2xwlsWmGmdmhJ3uROAJxA8dzQ-Ff5kGwx9XlNrm2tg3ZgoNFny2q3XtXrnE8X2QHmf8%2F160fx160f"
+    },
+    {
+      "key": "input-1-0",
+      "name": "MAC-10 | Sakkaku (Well-Worn)",
+      "cn": "MAC-10 | 错觉 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "unit_price": 1.99,
+      "wear": 0.398,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8n5WxrR1Y-s2jaac8cM-AD2ybwOVjj-xsSyCmmFMk5mnRzdeqdSnCPVN2DpV3QeELtELrlIbiPrzqsVOMjdlBnySvjH5O8G81tOTP5a5f%2F160fx160f"
+    },
+    {
+      "key": "input-1-1",
+      "name": "MAC-10 | Sakkaku (Well-Worn)",
+      "cn": "MAC-10 | 错觉 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "unit_price": 1.99,
+      "wear": 0.398,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8n5WxrR1Y-s2jaac8cM-AD2ybwOVjj-xsSyCmmFMk5mnRzdeqdSnCPVN2DpV3QeELtELrlIbiPrzqsVOMjdlBnySvjH5O8G81tOTP5a5f%2F160fx160f"
+    },
+    {
+      "key": "input-2-0",
+      "name": "MAC-10 | Sakkaku (Well-Worn)",
+      "cn": "MAC-10 | 错觉 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "unit_price": 2,
+      "wear": 0.388,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8n5WxrR1Y-s2jaac8cM-AD2ybwOVjj-xsSyCmmFMk5mnRzdeqdSnCPVN2DpV3QeELtELrlIbiPrzqsVOMjdlBnySvjH5O8G81tOTP5a5f%2F160fx160f"
+    },
+    {
+      "key": "input-3-0",
+      "name": "UMP-45 | Continuum (Battle-Scarred)",
+      "cn": "UMP-45 | 连续体 (战痕累累)",
+      "collection": "The Genesis Collection",
+      "unit_price": 2.33,
+      "wear": 0.872,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkk4a0qB1O4uL6PZtkLPyGA26ewNFg4t5hSiiljFMl52mEwoyhJHKWbFd0CcNxQrJY4ETuwNHjN-Lh7wfWjoIXzCuvhi0Y8G81tNBOgPTg%2F160fx160f"
+    }
+  ],
+  "outputs": [
+    {
+      "key": "output-3",
+      "name": "AWP | Ice Coaled (Well-Worn)",
+      "cn": "AWP | 可燃冰 (破损不堪)",
+      "collection": "The Genesis Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.44911724137931036,
+      "price": 29,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_DVL0PutbZtuL_GfC2OvzOtyufRkAXrmlkoj42jRmY6qdiqROgQpWcNwFOELskS4wIflNuuw5VHXid5Dn3ngznQeo-nPzak%2F160fx160f"
+    },
+    {
+      "key": "output-4",
+      "name": "MP7 | Smoking Kills (Well-Worn)",
+      "cn": "MP7 | 吸烟有害健康 (破损不堪)",
+      "collection": "The Genesis Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.44911724137931036,
+      "price": 26.18,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf8DIM0OGjZ69kLvesBW6czf1JprNWQiy3nAgq_TjSyIn8cy2eb1UjW5p4R-JeuhC_xIC1P-zn7wOIjItCn3383Hgf6n11o7FVl5bdg0g%2F160fx160f"
+    },
+    {
+      "key": "output-5",
+      "name": "Glock-18 | Mirror Mosaic (Well-Worn)",
+      "cn": "格洛克 18 型 | 镜面马赛克 (破损不堪)",
+      "collection": "The Genesis Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.44911724137931036,
+      "price": 23.55,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL2kpnj9h1c4_2tY5tgKeKBAXWvzO9std5_HRajkBw1vwKIn4vwNCaJagYiWJFzQ-cOuhC6w93lYby34wHb39oXmSz2iyhAvS9usexRUKcm-rqX0V-HCRcuyA%2F160fx160f"
+    },
+    {
+      "key": "output-2",
+      "name": "AWP | Duality (Field-Tested)",
+      "cn": "AWP | 金粉肆蛇 (久经沙场)",
+      "collection": "The Revolution Collection",
+      "probability": 0.3,
+      "expected_wear": 0.35929379310344833,
+      "price": 17.31,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf-jFk7uW-V6hkLfKcMXSewOVzj-xsSyCmmFN0tzvcnor9IC7CP1BxDpVyEO9Zt0Swx4bvP-7ktQfZj4kTn3n2hi8b8G81tHGU9aNy%2F160fx160f"
+    },
+    {
+      "key": "output-1",
+      "name": "UMP-45 | Wild Child (Well-Worn)",
+      "cn": "UMP-45 | 野孩子 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "probability": 0.3,
+      "expected_wear": 0.44911724137931036,
+      "price": 16.7,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkk4a0qB1Y-s27ZbRSI_yGGmSY_uV_s-pWQiy3nAgq_T6AyNasJ3iePQByW5NwTeEKsxbqw9LhYePitlbZ34wWxXqsjyhPvy11o7FVOjdBjQA%2F160fx160f"
+    },
+    {
+      "key": "output-0",
+      "name": "P2000 | Wicked Sick (Well-Worn)",
+      "cn": "P2000 | 变态杀戮 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "probability": 0.3,
+      "expected_wear": 0.44911724137931036,
+      "price": 16.6,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL5lYayrXIL0PG7V7Q_cKDDMWOVwuJ_vuRWQiy3nAgq_WmHn96ucnyTPwAmApIlQOBYtBftwYDnMr-x5VOIg9lDn37-3CJBvHt1o7FVCvQdJQc%2F160fx160f"
+    }
+  ],
+  "collections": [
+    "The Revolution Collection",
+    "The Genesis Collection"
+  ],
+  "hero_output": {
+    "key": "output-3",
+    "name": "AWP | Ice Coaled (Well-Worn)",
+    "cn": "AWP | 可燃冰 (破损不堪)",
+    "collection": "The Genesis Collection",
+    "probability": 0.03333333333333333,
+    "expected_wear": 0.44911724137931036,
+    "price": 29,
+    "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_DVL0PutbZtuL_GfC2OvzOtyufRkAXrmlkoj42jRmY6qdiqROgQpWcNwFOELskS4wIflNuuw5VHXid5Dn3ngznQeo-nPzak%2F160fx160f"
+  }
+}

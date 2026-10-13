@@ -63,8 +63,8 @@ export class BuffMarket {
    * @param {object} opts
    * @param {number} opts.minIntervalMs 请求间隔（buff 风控严格，默认 3s）
    */
-  constructor({ minIntervalMs = 3000, verbose = true } = {}) {
-    this.http = new HttpClient({ minIntervalMs, maxRetries: 4, label: 'buff', verbose });
+  constructor({ minIntervalMs = 3000, verbose = true, signal } = {}) {
+    this.http = new HttpClient({ minIntervalMs, maxRetries: 4, label: 'buff', verbose, signal });
     this.verbose = verbose;
   }
 
@@ -96,7 +96,7 @@ export class BuffMarket {
    * @param {string} q.search    名称关键字
    * @param {string} q.sortBy
    */
-  async listGoods(q = {}) {
+  async listGoods(q = {}, requestOptions = {}) {
     const p = new URLSearchParams({ game: 'csgo', page_num: String(q.pageNum || 1), page_size: String(q.pageSize || 50) });
     if (q.rarity) p.set('rarity', q.rarity);
     if (q.exterior) p.set('exterior', q.exterior);
@@ -111,7 +111,7 @@ export class BuffMarket {
     if (q.minPrice != null) p.set('min_price', String(q.minPrice));
     if (q.maxPrice != null) p.set('max_price', String(q.maxPrice));
 
-    const res = await this.http.getJson(`${ORIGIN}/api/market/goods?${p}`, this._headers());
+    const res = await this.http.getJson(`${ORIGIN}/api/market/goods?${p}`, this._headers(), requestOptions);
     const kind = BuffMarket.classify(res);
     if (kind !== 'ok') return { ok: false, kind, items: [], total: 0, res };
     // 注意：HttpClient 返回的 res.data 已经是解析后的 JSON，不要再 .data.data
@@ -126,9 +126,9 @@ export class BuffMarket {
   }
 
   /** 单品详情：拿 paintwear_range（材料可用的磨损区间）与来源 */
-  async goodsInfo(goodsId) {
+  async goodsInfo(goodsId, requestOptions = {}) {
     const res = await this.http.getJson(
-      `${ORIGIN}/api/market/goods/info?game=csgo&goods_id=${goodsId}`, this._headers());
+      `${ORIGIN}/api/market/goods/info?game=csgo&goods_id=${goodsId}`, this._headers(), requestOptions);
     const kind = BuffMarket.classify(res);
     if (kind !== 'ok') return { ok: false, kind, info: null };
     return { ok: true, kind, info: res.data.data };

@@ -10,6 +10,8 @@ const check = (name, cond, detail = '') => {
   cond ? pass++ : fail++;
 };
 const eq = (name, a, b) => check(name, Object.is(a, b), `a=${a} b=${b}`);
+// 站点口径（script.js:1201-1202, 1242-1243）：产物区间先落 f32 再映射
+const siteOut = (sum, n, lo, hi) => { const mn = f32(lo), mx = f32(hi); return f32(mn + f32(f32(f32(sum) / f32(n)) * f32(mx - mn))); };
 
 /** 造一批材料；同区间时用同一个 range */
 const mk = (wears, range) => wears.map(w => ({ wear: w, matMin: range[0], matMax: range[1] }));
@@ -32,12 +34,12 @@ console.log('\n=== 2. 产物磨损公式 ===');
 
   // 材料区间 [0,1]，产物区间 [0.1,0.7]：材料均值 0.5 → 产物 0.1+0.5*0.6=0.4
   const m2 = mk(Array(10).fill(0.5), [0, 1]);
-  eq('材料区间[0,1] 全 0.5 → 产物 0.4', outputWear(m2, 0.10, 0.70), f32(0.4));
+  eq('材料区间[0,1] 全 0.5 → 产物 0.4', outputWear(m2, 0.10, 0.70), siteOut(5, 10, 0.10, 0.70));
 
   // 混合区间：一半材料区间[0,1]均值0.5，一半区间[0,0.5]均值0.25
   // 归一化后都是 0.5 → 产物 0.4
   const mixed = [...mk(Array(5).fill(0.5), [0, 1]), ...mk(Array(5).fill(0.25), [0, 0.5])];
-  eq('不同区间但归一化相同 → 产物 0.4', outputWear(mixed, 0.10, 0.70), f32(0.4));
+  eq('不同区间但归一化相同 → 产物 0.4', outputWear(mixed, 0.10, 0.70), siteOut(5, 10, 0.10, 0.70));
 
   // 与 outputWearFromNormalizedSum 一致
   const sum = mixed.reduce((a, m) => f32(a + normalizeWear(m.wear, m.matMin, m.matMax)), 0);
@@ -101,7 +103,7 @@ console.log('\n=== 6. 求解器：池中存在精确解 ===');
   } else {
     const ref = probe.pairs[0];
     const wantSum = ref.sum;
-    const targetOut = f32(outMin + f32(f32(wantSum / 10) * f32(outMax - outMin)));
+    const targetOut = siteOut(wantSum, 10, outMin, outMax);
 
     // 基准自检：这组解必须真的能复核通过
     const refMats = ref.indices.map(i => ({ wear: norm[i], matMin: 0, matMax: 1 }));

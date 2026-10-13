@@ -11,17 +11,13 @@
  *     - GET /market/search/render/?appid=730&norender=1&count=&start=&query=&sort_column=
  *       → 可搜索、可排序、可分页；但返回价格是美元（$），需要另行换算。
  *
- *  ❌ 不能用：
- *     - /market/listings/730/<name>：被 SteamTools 返回 HTTP 500（它自己的 SSR 页面），
- *       拿不到 g_rgListingInfo。
- *     - 因此**Steam 无法提供每一笔挂单的精确磨损（float）**。
- *       Steam 的挂单 float 只存在于 game coordinator 的检视数据里，网页端也是靠
- *       protobuf 拿检视链接再解码，本环境无法实现。
+ *  ⚠️ 注意：
+ *     - 新版 /market/listings/730/<name> 是磨损聚合页，页面里可能同时出现 FN/MW/FT/WW/BS。
+ *       每笔挂单的 description.market_hash_name 与 asset_properties.propertyid=2 才是身份和磨损的
+ *       权威来源，不能用请求 URL 覆盖它们。
  *
- * 所以 Steam 在本项目里的定位是**价格参照 / 更便宜的替代来源**：
- * 它能告诉你「同一个皮肤同一个磨损档，在 Steam 上最低多少钱」，
- * 用来和 BUFF 对比、找出更划算的一边。但它给的挂单只能保证「落在该磨损档区间内」，
- * 无法保证是我们算出的那个精确 float。
+ * Steam 因此可以直接作为候选池来源：先按挂单自身的 market_hash_name 过滤聚合页，
+ * 再用每笔 float 求解配方。
  *
  * 货币：currency=23 是人民币。Steam 的 search/render 不认 currency 参数（返回 $），
  * 所以只用它做搜索/发现，价格一律走 priceoverview。
@@ -29,6 +25,7 @@
 
 import { httpsGet, proxyFromEnv, makeFetcher, DEFAULT_UA } from '../util/net.mjs';
 import { steamListingUrl } from './inspect.mjs';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const ORIGIN = 'https://steamcommunity.com';
 export const CNY = 23;
@@ -41,6 +38,25 @@ export const STEAM_EXTERIOR_TAG = {
   ww: 'tag_WearCategory3',
   bs: 'tag_WearCategory4',
 };
+
+const EXTERIOR_RANGES = {
+  'Factory New': [0, 0.07],
+  'Minimal Wear': [0.07, 0.15],
+  'Field-Tested': [0.15, 0.38],
+  'Well-Worn': [0.38, 0.45],
+  'Battle-Scarred': [0.45, 1],
+};
+
+/** 商品身份与挂单实际磨损同时校验，避免聚合页混档或无身份数据被误用。 */
+export function steamListingMatches(listing, marketHashName) {
+  if (!listing.marketHashName || listing.marketHashName !== marketHashName) return false;
+  const exterior = marketHashName.match(/\(([^()]*)\)\s*$/)?.[1];
+  const range = EXTERIOR_RANGES[exterior];
+  const wear = listing.floatvalue;
+  if (!range || !Number.isFinite(wear)) return false;
+  return wear >= Math.fround(range[0]) &&
+    (exterior === 'Battle-Scarred' ? wear <= 1 : wear < Math.fround(range[1]));
+}
 
 /** 从 "¥ 4.96" / "$0.73" 这类文本里解析出数值 */
 export function parsePriceText(txt) {
@@ -70,7 +86,7 @@ export function extractNextCursor(html) {
  * 需要递归下降解析才能拿到 `listings` 数组。
  *
  * 每笔挂单的关键字段：
- *   listingid      —— 挂单 id，用于构造直接购买链接 ?listing=<id>
+ *   listingid      —— 挂单 id，用于构造挂单详情链接 ?detail=<id>
  *   unPrice/unFee  —— 价格（分）；strSubtotal 是显示价，如 "¥0.55"
  *   asset.asset_properties[]:
  *       {propertyid: 1, int_value: "438"}                —— paintseed
@@ -138,6 +154,10 @@ function normalizeListing(l) {
     ? l.unPrice + (l.unFee || 0)
     : null;
 
+  // 新版 Steam 的商品页会跳转到一个聚合页，页内可能同时注水 FN/MW/FT/WW/BS。
+  // 不能使用请求 URL 推断档位，必须保留每笔挂单自己的商品描述。
+  const description = l.description || {};
+
   return {
     market: 'steam',
     listingId: String(l.listingid),
@@ -148,6 +168,9 @@ function normalizeListing(l) {
     priceCents: cents,
     priceText: l.strSubtotal || (cents != null ? (cents / 100).toFixed(2) : null),
     currencyId: l.eCurrency != null ? l.eCurrency : null,
+    name: description.market_name || null,
+    marketHashName: description.market_hash_name || null,
+    exterior: description.market_name_inside_group || null,
     inspectPropertiesEncrypted: props.some(x => x.propertyid === 6),
     raw: l,
   };
@@ -161,14 +184,15 @@ export class SteamMarket {
    * @param {string}  opts.caFile         自定义根证书
    * @param {boolean} opts.symbolOnly     是否只关心符号（默认人民币 ¥）
    */
-  constructor({ minIntervalMs = 1600, proxy, allowInsecure = true, caFile = null, verbose = false } = {}) {
+  constructor({ minIntervalMs = 1600, proxy, allowInsecure = true, caFile = null, verbose = false, signal } = {}) {
     this.proxy = proxy !== undefined ? proxy : proxyFromEnv();
     this.allowInsecure = allowInsecure;
     this.caFile = caFile;
     this.verbose = verbose;
+    this.signal = signal;
     this.fetch = makeFetcher({
       proxy: this.proxy, allowInsecure, caFile,
-      minIntervalMs, label: 'steam',
+      minIntervalMs, label: 'steam', signal,
     });
     this._cache = new Map();
   }
@@ -180,6 +204,7 @@ export class SteamMarket {
    * @returns {Promise<{ok:boolean, lowest?:number, median?:number, volume?:number, lowestText?:string, raw?:string, error?:string}>}
    */
   async priceOverview(marketHashName, { currency = CNY } = {}) {
+    this.signal?.throwIfAborted();
     const key = `${currency}|${marketHashName}`;
     if (this._cache.has(key)) return this._cache.get(key);
     const url = `${ORIGIN}/market/priceoverview/?appid=730&currency=${currency}&market_hash_name=${encodeURIComponent(marketHashName)}`;
@@ -207,6 +232,7 @@ export class SteamMarket {
         };
       }
     } catch (e) {
+      this.signal?.throwIfAborted();
       out = { ok: false, error: e.message };
     }
     this._cache.set(key, out);
@@ -216,12 +242,13 @@ export class SteamMarket {
   /**
    * 搜索市场（用于发现/排序）。注意返回价格是美元，只作参考。
    */
-  async search({ query = '', start = 0, count = 20, sortColumn = 'price', sortDir = 'asc', exterior = null } = {}) {
+  async search({ query = '', start = 0, count = 20, sortColumn = 'price', sortDir = 'asc', exterior = null, language = null } = {}) {
     const p = new URLSearchParams({
       appid: '730', norender: '1', count: String(count), start: String(start),
       sort_column: sortColumn, sort_dir: sortDir,
     });
     if (query) p.set('query', query);
+    if (language) p.set('l', language);
     if (exterior) p.set('category_730_Exterior[]', STEAM_EXTERIOR_TAG[exterior] || exterior);
     const url = `${ORIGIN}/market/search/render/?${p}`;
     try {
@@ -234,6 +261,7 @@ export class SteamMarket {
         total: j.total_count,
         results: (j.results || []).map(it => ({
           name: it.hash_name,
+          localizedName: it.asset_description?.market_name || it.name || null,
           sellListings: it.sell_listings,
           priceText: it.sell_price_text,
           priceUsd: it.sell_price != null ? it.sell_price / 100 : null,
@@ -241,6 +269,7 @@ export class SteamMarket {
         })),
       };
     } catch (e) {
+      this.signal?.throwIfAborted();
       return { ok: false, error: e.message };
     }
   }
@@ -271,6 +300,7 @@ export class SteamMarket {
     let rateLimited = false;
 
     for (let page = 0; page < Math.max(1, pages); page++) {
+      this.signal?.throwIfAborted();
       const start = page * 20;
       const base = `${ORIGIN}/market/listings/730/${encodeURIComponent(marketHashName)}`;
       const url = start ? `${base}?start=${start}` : base;
@@ -285,6 +315,7 @@ export class SteamMarket {
       try {
         r = await this.fetch(url, { headers, retries: 2, timeoutMs: 40000 });
       } catch (e) {
+        this.signal?.throwIfAborted();
         if (page === 0) return { ok: false, error: `请求挂单页失败：${e.message}`, listings: [] };
         break;
       }
@@ -294,11 +325,11 @@ export class SteamMarket {
       if (r.status === 500 || r.status === 429 || r.status === 503) {
         let recovered = false;
         for (let att = 0; att < 3 && !recovered; att++) {
-          await new Promise(res => setTimeout(res, 6000 * (att + 1) + Math.random() * 2000));
+          await delay(6000 * (att + 1) + Math.random() * 2000, undefined, { signal: this.signal });
           try {
             const r2 = await this.fetch(url, { headers, retries: 0, timeoutMs: 40000 });
             if (r2.status === 200) { r = r2; recovered = true; }
-          } catch { /* 继续退避 */ }
+          } catch { this.signal?.throwIfAborted(); /* 继续退避 */ }
         }
         if (!recovered) {
           rateLimited = true;
@@ -341,17 +372,16 @@ export class SteamMarket {
         break;
       }
 
-      let added = 0;
       for (const l of [...parsed.listings, ...parsed.pendingListings]) {
+        if (!steamListingMatches(l, marketHashName)) continue;
         if (seen.has(l.listingId)) continue;
         seen.add(l.listingId);
         collected.push(l);
-        added++;
       }
       pagesFetched++;
 
-      // 这一页没有新数据（到底了）就停
-      if (added === 0) break;
+      // 聚合页可能整页都是其它档位，不能因过滤后为空就误判到底。
+      if (parsed.rawCount === 0) break;
       // 已抓到的数量达到总量也停
       if (parsed.rawTotal && start + 20 >= parsed.rawTotal) break;
     }

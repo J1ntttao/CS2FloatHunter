@@ -13,8 +13,7 @@
  *   3. 给出明确的失败原因
  *
  * 支持的凭证形式：
- *   - Steam Cookie 头（含 steamLoginSecure / sessionid / steamCountry …）
- *   - 只给 steamLoginSecure 的值（形如 7656119xxxxxxxxx%7C%7C<hex>）
+ *   - steamLoginSecure 的值（SteamID64||JWT，分隔符也可以是 %7C%7C）
  *   - CSFloat 的 JWT（形如 eyJ...），用于 api.csfloat.com
  */
 
@@ -26,14 +25,20 @@ const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const DATA_DIR = path.join(ROOT, 'data');
 const CRED_FILE = path.join(DATA_DIR, 'csfloat-credentials.json');
 
-/** steamLoginSecure 形如 76561198xxxxxxxxx%7C%7C<hex> */
+/** 只解析 steamLoginSecure 的值；JWT 解码只检查结构，不代表签名验证成功。 */
 export function parseSteamLoginSecure(value) {
   const raw = String(value || '').trim();
   if (!raw) return null;
-  const dec = decodeURIComponent(raw);
-  const m = dec.match(/^(7656\d{13})\|\|(.+)$/);
-  if (!m) return null;
-  return { steamId: m[1], token: m[2], raw };
+  try {
+    const dec = decodeURIComponent(raw);
+    const m = dec.match(/^(7656\d{13})\|\|([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/);
+    if (!m) return null;
+    const [header, payload] = m[2].split('.').slice(0, 2)
+      .map(part => JSON.parse(Buffer.from(part, 'base64url').toString('utf8')));
+    if (!header || typeof header.alg !== 'string' || header.alg.toLowerCase() === 'none') return null;
+    if (payload?.sub !== m[1] || !Number.isFinite(payload.exp) || payload.exp <= 0) return null;
+    return { steamId: m[1], token: m[2], raw, cookieValue: encodeURIComponent(dec), expiresAt: payload.exp };
+  } catch { return null; }
 }
 
 /** 看起来像不像 CSFloat 的 JWT */
@@ -64,15 +69,15 @@ export function saveCsfloatCreds(patch) {
  *
  * 判定方式：请求 /my/tradeoffers 或 /profiles/<steamid> —— 带有效登录态时
  * 会返回已登录页面；未登录会被重定向到登录页。
- * 我们同时检查 Set-Cookie / 重定向目标 / 页面标志，尽量给出可读结论。
+ * 只跟随 Steam 社区站内跳转，并检查登录账号标识；HTTP 200 本身不代表登录成功。
  */
-export async function verifySteamSession(cookieHeader, { allowInsecure = true, proxy = null } = {}) {
-  if (!cookieHeader) return { ok: false, reason: 'no_cookie', message: '没有提供 Steam Cookie' };
+export async function verifySteamSession(cookieHeader, { allowInsecure = true, proxy = null, request = httpsGet } = {}) {
+  if (!cookieHeader) return { ok: false, reason: 'no_cookie', message: '没有提供 steamLoginSecure 的值' };
 
   const hasLoginSecure = /steamLoginSecure=/.test(cookieHeader);
   const hasSessionId = /sessionid=/.test(cookieHeader);
   const parsed = (() => {
-    const m = cookieHeader.match(/steamLoginSecure=([^;]+)/);
+    const m = cookieHeader.match(/(?:^|;\s*)steamLoginSecure=([^;]+)/);
     return m ? parseSteamLoginSecure(m[1]) : null;
   })();
 
@@ -82,35 +87,60 @@ export async function verifySteamSession(cookieHeader, { allowInsecure = true, p
     tokenLooksValid: !!parsed,
   };
 
-  // 用一个"登录与未登录返回不同"的端点做判定
-  const url = 'https://steamcommunity.com/my/tradeoffers';
+  if (!parsed) return { ...out, ok: false, reason: 'invalid_format', message: 'steamLoginSecure 格式无效，应为 SteamID64||JWT 或 SteamID64%7C%7CJWT' };
+  if (parsed.expiresAt <= Date.now() / 1000) {
+    return { ...out, ok: false, reason: 'expired', message: 'steamLoginSecure 中的 JWT 已过期，请登录 Steam 后重新复制' };
+  }
+  let url = 'https://steamcommunity.com/my/tradeoffers';
+  const visited = new Set();
+  const deadline = Date.now() + 15000;
+  const signal = AbortSignal.timeout(15000);
   try {
-    const r = await httpsGet(url, {
-      allowInsecure, proxy,
-      headers: { accept: 'text/html', cookie: cookieHeader, referer: 'https://steamcommunity.com/' },
-      followRedirects: false, timeoutMs: 25000,
-    });
-    out.httpStatus = r.status;
-    out.location = r.headers?.location || null;
-
-    if (r.status >= 300 && r.status < 400 && /\/login|\/openid/i.test(out.location || '')) {
-      return { ...out, ok: false, reason: 'not_logged_in', message: 'Steam 把请求重定向到了登录页，说明登录态无效或已过期' };
-    }
-    if (r.status === 200) {
-      // 200 也可能是登录页（Steam 有时直接渲染登录页），再查内容特征
-      const body = r.body || '';
-      const isLoginPage = /<title>[^<]*Sign In|登录 Steam|action="\/login\/doLogin"/i.test(body);
-      if (isLoginPage) {
-        return { ...out, ok: false, reason: 'not_logged_in', message: '返回的是登录页内容，登录态无效' };
+    for (let step = 0; step < 5; step++) {
+      if (visited.has(url)) return { ...out, ok: false, reason: 'redirect', message: 'Steam 验证遇到重定向循环，无法确认登录态' };
+      visited.add(url);
+      const r = await request(url, {
+        allowInsecure, proxy,
+        headers: { accept: 'text/html', cookie: cookieHeader, referer: 'https://steamcommunity.com/' },
+        followRedirects: false, timeoutMs: Math.max(1, deadline - Date.now()), signal,
+      });
+      out.httpStatus = r.status;
+      const location = r.headers?.location;
+      if (r.status >= 300 && r.status < 400 && /\/login|\/openid/i.test(location || '')) {
+        return { ...out, ok: false, reason: 'not_logged_in', message: 'Steam 把请求重定向到了登录页，说明登录态无效或已过期' };
       }
-      // 找个人标识
-      const nameMatch = body.match(/<span class="actual_persona_name">([^<]+)<\/span>/);
-      out.personaName = nameMatch ? nameMatch[1].trim() : null;
-      return { ...out, ok: true, message: `Steam 登录态有效${out.personaName ? `（账号：${out.personaName}）` : ''}` };
+      if (r.status >= 300 && r.status < 400 && location) {
+        const next = new URL(location, url);
+        if (next.origin !== 'https://steamcommunity.com' || next.username || next.password) {
+          return { ...out, ok: false, reason: 'redirect', message: 'Steam 验证跳转到了其他站点，无法确认登录态' };
+        }
+        url = next.href;
+        continue;
+      }
+      if (r.status === 200) {
+        // 200 也可能是登录页（Steam 有时直接渲染登录页），再查内容特征
+        const body = r.body || '';
+        const isLoginPage = /<title>[^<]*Sign In|登录 Steam|action="\/login\/doLogin"/i.test(body);
+        if (isLoginPage) {
+          return { ...out, ok: false, reason: 'not_logged_in', message: '返回的是登录页内容，登录态无效' };
+        }
+        // 找个人标识
+        const idMatch = body.match(/\bg_steamID\s*=\s*['"](\d+)['"]/);
+        if (idMatch && idMatch[1] !== parsed.steamId) {
+          return { ...out, ok: false, reason: 'account_mismatch', message: 'Steam 返回的账号与 steamLoginSecure 中的 SteamID 不一致' };
+        }
+        const nameMatch = body.match(/<span\b[^>]*class=['"][^'"]*\bactual_persona_name\b[^'"]*['"][^>]*>([^<]+)<\/span>/i);
+        if (!idMatch && !nameMatch) {
+          return { ...out, ok: false, reason: 'unconfirmed', message: 'Steam 页面没有登录账号标识，无法确认登录态' };
+        }
+        out.personaName = nameMatch ? nameMatch[1].trim() : null;
+        return { ...out, ok: true, message: `Steam 登录态有效${out.personaName ? `（账号：${out.personaName}）` : ''}` };
+      }
+      return { ...out, ok: false, reason: `http_${r.status}`, message: `Steam 返回 HTTP ${r.status}` };
     }
-    return { ...out, ok: false, reason: `http_${r.status}`, message: `Steam 返回 HTTP ${r.status}` };
+    return { ...out, ok: false, reason: 'redirect', message: 'Steam 验证跳转次数过多，无法确认登录态' };
   } catch (e) {
-    return { ...out, ok: false, reason: 'network', message: `验证失败：${e.message}` };
+    return { ...out, ok: false, reason: 'network', message: 'Steam 在线验证失败，请检查网络、代理或证书设置后重试' };
   }
 }
 

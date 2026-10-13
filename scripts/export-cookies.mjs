@@ -34,7 +34,6 @@ const CACHE_DIR = path.join(ROOT, '.cache');
 
 const TARGET_DOMAINS = [
   'buff.163.com',
-  'youpin898.com',
   'steamcommunity.com',
   'cs2up.cn',
   '163.com',
@@ -247,7 +246,7 @@ async function main() {
     log(`      ${d.padEnd(24)} ${String(names.length).padStart(3)} 条  [${names.slice(0, 12).join(', ')}${names.length > 12 ? ', ...' : ''}]`);
   }
   if (!wanted.length) {
-    warn('\n  ! 未匹配到任何目标站点 cookie。请确认已在该 Chrome profile 里登录 buff / 悠悠有品。');
+    warn('\n  ! 未匹配到任何目标站点 cookie。请确认已在该 Chrome profile 里登录 buff。');
   }
 
   log('\n[4/4] 写入凭证文件 ...');

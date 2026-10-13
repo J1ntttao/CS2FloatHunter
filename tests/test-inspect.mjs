@@ -93,7 +93,9 @@ console.log('\n=== 5. Steam 购买链接构造 ===');
 {
   const u = steamListingUrl('AK-47 | Redline (Field-Tested)', '2906459769049600931');
   check('包含 URL 编码的商品名', u.includes('AK-47%20%7C%20Redline%20(Field-Tested)'), u);
-  check('带 listing 参数指向该笔', u.includes('?listing=2906459769049600931'), u);
+  const parsedUrl = new URL(u);
+  check('detail 参数保留完整挂单 ID，打开该笔详情',
+    parsedUrl.searchParams.get('detail') === '2906459769049600931' && !parsedUrl.searchParams.has('listing'), u);
 }
 
 console.log('\n=== 6. 异常输入不崩、不静默出错 ===');

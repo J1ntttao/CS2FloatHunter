@@ -415,5 +415,3 @@ export class SteamMarket {
     };
   }
 }
-
-\r\n

@@ -33,20 +33,20 @@ if exist "data\cookies.manual.buff.json" (
   echo     或运行：powershell -File scripts\set-cookies.ps1 -Site buff
 )
 
-rem 3) 服务已在运行就直接打开浏览器
-node -e "fetch(process.argv[1]+'/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))" "%URL%"
-if not errorlevel 1 (
-  echo [ok] 服务已在运行，正在打开 %URL%
-  start "" "%URL%"
-  set "EXIT_CODE=0"
-  goto :done
-)
+rem 3) 结束本项目的旧服务和 watch 任务
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\restart-web.ps1" -Port "%CS2_WEB_PORT%"
+if errorlevel 1 goto :fail
+node --check "%~dp0src\market\steam.mjs"
+if errorlevel 1 goto :fail
+node --check "%~dp0src\web\server.mjs"
+if errorlevel 1 goto :fail
 
 rem 4) 启动服务，2 秒后自动打开浏览器
-echo [..] 正在启动服务：%URL%   （关闭此窗口或按 Ctrl+C 停止）
+echo [..] 正在启动服务：%URL%
+echo [..] Ctrl+C to stop.
 echo.
-start "" /b cmd /c "timeout /t 2 /nobreak >nul & start "" "%URL%""
-node --watch src\web\server.mjs
+start "" /b powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0scripts\restart-web.ps1" -Port "%CS2_WEB_PORT%" -OpenBrowser
+node --watch "%~dp0src\web\server.mjs"
 
 set "EXIT_CODE=%errorlevel%"
 echo.
@@ -58,7 +58,6 @@ if "%EXIT_CODE%"=="0" (
 goto :fail
 
 :fail
-:done
 echo.
 echo 按任意键关闭此窗口...
 pause >nul

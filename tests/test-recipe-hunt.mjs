@@ -97,6 +97,35 @@ assert.equal(tooFew.error, 'not_enough_recipe_materials');
 assert.ok(tooFew.poolSize >= 10);
 assert.match(tooFew.message, /需要 6 把，只找到 5 把/);
 console.log('✓ 总候选超过 10 把但某种缺 1 把时仍拒绝，不用其它枪皮补数');
+
+// 失败材料写入检查点；继续时只重抓失败项，并复用成功材料。
+const resumeState = { id: 'resume-test', items: {} };
+const flakyCalls = [];
+let failOnce = true;
+const flakySteam = {
+  async listingsWithFloats(name) {
+    flakyCalls.push(name);
+    const material = plan.materialSpecs.find(m => name.startsWith(m.nameEn + ' ('));
+    if (failOnce && material.id === 'UMP_45_连续体') {
+      failOnce = false;
+      throw new Error('代理连接超时');
+    }
+    return { ok: true, pagesFetched: 1, listings: candidates(material, 0.2).map(l => ({ ...l, marketHashName: name })) };
+  },
+};
+const interrupted = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001,
+  steam: flakySteam, resumeState });
+assert.equal(interrupted.error, 'not_enough_recipe_materials');
+assert.equal(resumeState.items.R8左轮手枪_蕉农炮.complete, true);
+assert.equal(resumeState.items.MAC_10_错觉.complete, true);
+assert.equal(resumeState.items.UMP_45_连续体.complete, false);
+const callsBeforeResume = flakyCalls.length;
+const resumed = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001,
+  steam: flakySteam, resumeState }, { timeBudgetMs: 1000 });
+verifyResult(resumed, 0.2);
+assert.equal(flakyCalls.length - callsBeforeResume, 1);
+console.log('✓ 继续抓取只重试失败材料并复用已成功候选');
+
 const wrongOnly = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001,
   steam: mockSteam(0.2, { wrongOnly: true }) });
 assert.equal(wrongOnly.poolSize, 0);

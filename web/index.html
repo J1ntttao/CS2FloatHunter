@@ -290,6 +290,7 @@
     <div style="margin-top:24px;display:flex;gap:12px;align-items:center">
       <button id="go">开始搜索</button>
       <button id="stop" class="ghost" style="display:none;border-color:var(--err);color:var(--err)">停止搜索</button>
+      <button id="continue" class="ghost" style="display:none;border-color:var(--ok);color:var(--ok)">继续获取失败项</button>
     </div>
     <div class="log" id="status" aria-live="polite"></div>
   </section>
@@ -505,7 +506,14 @@ function qualityInputChanged() {
   qualityTimer = setTimeout(() => loadRecipeQuality(sid, version), 400);
 }
 $('link').addEventListener('input', qualityInputChanged);
+
+function invalidateResume() {
+  if (typeof activeResumeId !== 'undefined') activeResumeId = null;
+  if (typeof continueButton !== 'undefined' && continueButton) continueButton.style.display = 'none';
+}
+
 $('stattrak').addEventListener('change', () => {
+  invalidateResume();
   qualityOverrideSid = qualityInputSid();
   $('qualityNote').textContent = `已手动选择${$('stattrak').checked ? '暗金' : '普通'}搜索；更换配方后重新跟随链接。`;
 });
@@ -513,6 +521,18 @@ $('stattrak').addEventListener('change', () => {
 let MARKET = 'buff';
 let activeES = null;
 let activeTaskId = null;
+let activeResumeId = null;
+const continueButton = $('continue');
+
+function setResume(info) {
+  if (!info?.id || !info.canContinue) {
+    activeResumeId = info?.id && info.canContinue === false ? null : activeResumeId;
+    if (continueButton) continueButton.style.display = 'none';
+    return;
+  }
+  activeResumeId = info.id;
+  if (continueButton && !activeES) continueButton.style.display = '';
+}
 
 async function stopSearch() {
   const taskId = activeTaskId;
@@ -532,18 +552,21 @@ async function stopSearch() {
   $('go').disabled = false;
   $('stattrak').disabled = false;
   $('stop').style.display = 'none';
+  if (continueButton && activeResumeId) continueButton.style.display = '';
   statusLine('已手动停止搜索', 'bad');
 }
 
 $('stop').onclick = stopSearch;
 document.querySelectorAll('#marketSeg button').forEach(b => {
   b.onclick = () => {
+    invalidateResume();
     document.querySelectorAll('#marketSeg button').forEach(x => x.classList.remove('on'));
     b.classList.add('on');
     MARKET = b.dataset.m;
     $('marketNote').textContent = MARKET_NOTE[MARKET];
   };
 });
+for (const id of ['link', 'wear', 'band', 'interval']) $(id).addEventListener?.('input', invalidateResume);
 document.querySelectorAll('nav a').forEach(a => {
   a.onclick = () => {
     document.querySelectorAll('nav a').forEach(x => x.classList.remove('on'));
@@ -600,14 +623,17 @@ async function refreshState() {
   } catch { statusLine('无法连接本地服务', 'bad'); }
 }
 
-$('go').onclick = () => {
+$('go').onclick = () => startSearch();
+
+function startSearch({ resume = false } = {}) {
   const link = $('link').value.trim();
   const w = $('wear').value.trim();
   if (!link) { statusLine('请填写 CS2UP 配方分享链接', 'bad'); return; }
   if (!w || !(Number(w) > 0 && Number(w) < 1)) { statusLine('目标磨损需在 0 到 1 之间', 'bad'); return; }
-  reset();
+  if (!resume) { activeResumeId = null; reset(); }
   $('go').disabled = true;
   $('stop').style.display = '';
+  if (continueButton) continueButton.style.display = 'none';
   statusLine(`连接本地服务（${MARKET_LABEL[MARKET]}）`, 'act');
   $('stattrak').disabled = true;
   const qs = new URLSearchParams({
@@ -621,6 +647,7 @@ $('go').onclick = () => {
   }
   activeTaskId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
   qs.set('task_id', activeTaskId);
+  if (resume && activeResumeId) qs.set('resume_id', activeResumeId);
   const px = $('proxy').value.trim();
   if (px) qs.set('proxy', px);
   const es = new EventSource('/api/hunt?' + qs.toString());
@@ -637,6 +664,7 @@ $('go').onclick = () => {
   };
   listen('stage', e => statusLine(JSON.parse(e.data).message, 'act'));
   listen('progress', e => statusLine(JSON.parse(e.data).message));
+  listen('resume', e => setResume(JSON.parse(e.data)));
   listen('located', e => {
     const d = JSON.parse(e.data);
     if (d.sid === qualityInputSid() && qualityOverrideSid !== d.sid) {
@@ -650,6 +678,7 @@ $('go').onclick = () => {
   });
   listen('result', e => {
     const d = JSON.parse(e.data);
+    if (d.resume) setResume(d.resume);
     renderResult(d);
     statusLine(d.exactFound ? '搜索完成，已精确命中' : '搜索完成，未精确命中（见最优误差）', 'ok');
   });
@@ -659,12 +688,18 @@ $('go').onclick = () => {
   });
   listen('error', e => {
     let msg = '连接中断';
-    try { msg = JSON.parse(e.data).message || msg; } catch {}
+    try {
+      const data = JSON.parse(e.data);
+      msg = data.message || msg;
+      if (data.resume) setResume(data.resume);
+    } catch {}
     statusLine('错误：' + msg, 'bad');
     finish();
   });
   es.onerror = () => { if (es.readyState === EventSource.CLOSED) finish(); };
-};
+}
+
+if (continueButton) continueButton.onclick = () => startSearch({ resume: true });
 
 function openBuyPanel(btn) {
   let items;

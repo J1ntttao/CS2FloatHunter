@@ -13,6 +13,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { fetchShareRecipe } from '../cs2up/recipe.mjs';
 import { listCollections } from '../cs2up/materials.mjs';
 import { locateCollection, planWithQuality } from '../cs2up/location.mjs';
@@ -32,6 +33,7 @@ const PORT = Number(process.env.CS2_WEB_PORT || 8788);
 const HOST = '127.0.0.1';
 
 const tasks = new SearchTasks();
+const huntCheckpoints = new Map();
 
 /** 读取 POST 的 JSON body（带上限） */
 function readJsonBody(req, limit = 512 * 1024) {
@@ -203,10 +205,34 @@ async function handleHunt(req, res, url) {
   // 支持 http:// 与 socks5:// 前缀；不写前缀按 http 处理
   const proxyParam = url.searchParams.get('proxy');
   const proxy = proxyParam ? parseProxyUrl(proxyParam) : undefined;
+  const resumeId = url.searchParams.get('resume_id') || '';
+  const checkpointSignature = JSON.stringify({
+    link, wear: wearRaw, band, intervalMs, market, quality: qualityParam || null,
+  });
 
   sseHead(res);
   const t0 = Date.now();
   const send = (event, data) => sse(res, event, { ...data, t: Date.now() - t0 });
+  const sendResume = info => { if (info?.id) send('resume', info); };
+
+  let checkpoint;
+  if (resumeId) {
+    checkpoint = huntCheckpoints.get(resumeId);
+    if (!checkpoint || checkpoint.signature !== checkpointSignature) {
+      send('error', { message: '继续搜索失败：恢复状态不存在或搜索条件已改变。请重新开始搜索。', code: 'resume_invalid' });
+      res.end();
+      return;
+    }
+  } else {
+    checkpoint = { id: randomUUID(), signature: checkpointSignature, items: {}, createdAt: Date.now() };
+    huntCheckpoints.set(checkpoint.id, checkpoint);
+  }
+  const discardCheckpoint = () => {
+    if (checkpoint) {
+      send('resume', { id: checkpoint.id, canContinue: false, pending: [] });
+      huntCheckpoints.delete(checkpoint.id);
+    }
+  };
 
   if (tasks.busy) { send('error', { message: '已有任务在跑，请等它结束。' }); res.end(); return; }
   const task = tasks.start(res, url.searchParams.get('task_id'));
@@ -217,14 +243,16 @@ async function handleHunt(req, res, url) {
     await task.run(async () => {
       if (!wearRaw || !Number.isFinite(targetWear) || targetWear <= 0 || targetWear >= 1) {
         send('error', { message: '请填写想要的产品磨损值（0 到 1 之间的小数，例如 0.2）', code: 'bad_wear' });
+        discardCheckpoint();
         return;
       }
       send('stage', { stage: 'recipe', message: '正在读取 CS2UP 配方中的材料种类与数量 ...' });
+      sendResume({ id: checkpoint.id, canContinue: true, pending: [] });
       const recipe = await fetchShareRecipe(link, { signal: task.signal });
       task.check();
-      if (!recipe.ok) { send('error', { message: recipe.message, code: recipe.error }); return; }
+      if (!recipe.ok) { send('error', { message: recipe.message, code: recipe.error }); discardCheckpoint(); return; }
       const located = locateCollection(recipe);
-      if (!located.ok) { send('error', { message: located.message, code: located.error }); return; }
+      if (!located.ok) { send('error', { message: located.message, code: located.error }); discardCheckpoint(); return; }
       const statTrak = qualityParam === '1' ? true : qualityParam === '0' ? false : recipe.statTrak;
       const loc = planWithQuality(located, statTrak);
 
@@ -263,6 +291,7 @@ async function handleHunt(req, res, url) {
               `请在页面上填写可用代理（自动探测到：${local ? `${local.type}://${local.host}:${local.port}` : '无'}）。` +
               `提示：本地 7890 端口实测无监听，7897 是 SteamTools 的拦截器、不是通用代理。`,
             code: 'steam_unreachable',
+            resume: { id: checkpoint.id, canContinue: true, pending: [] },
           });
           return;
         }
@@ -273,7 +302,7 @@ async function handleHunt(req, res, url) {
         }
         send('stage', { stage: 'steam', message: '「仅 Steam」模式：只用 Steam 挂单求解（无 BUFF 兜底）' });
         r = await hunter.huntFromSteam({
-          recipePlan: loc,
+          recipePlan: loc, resumeState: checkpoint,
           collectionName: loc.collection, materialGrade: loc.grade,
           targetWear, statTrak, band, count: loc.totalCount, steam,
         }, { onProgress: progress, timeBudgetMs: 40000, wants: 5 });
@@ -286,7 +315,7 @@ async function handleHunt(req, res, url) {
         r = await hunter.hunt({
           dataSource: market === 'both' ? 'both' : 'buff',
           steam: market === 'both' ? new SteamMarket({ minIntervalMs: 2500, allowInsecure, proxy, verbose: false, signal: task.signal }) : undefined,
-          recipePlan: loc,
+          recipePlan: loc, resumeState: checkpoint,
           collectionName: loc.collection, materialGrade: loc.grade,
           targetWear, statTrak, band, count: loc.totalCount,
         }, { onProgress: progress, timeBudgetMs: 40000, wants: 5 });
@@ -294,10 +323,12 @@ async function handleHunt(req, res, url) {
       task.check();
 
       if (!r.ok) {
+        sendResume(r.resume || { id: checkpoint.id, canContinue: true, pending: [] });
         send('error', {
           message: r.message,
           code: r.error,
           detail: { perItem: r.perItem || null, skippedRanges: r.skippedRanges || null },
+          resume: r.resume || { id: checkpoint.id, canContinue: true, pending: [] },
         });
         return;
       }
@@ -336,11 +367,17 @@ async function handleHunt(req, res, url) {
         ieee754: r.ieee754,
         targetWear,
         recipes: r.recipes,
+        resume: r.resume || { id: checkpoint.id, canContinue: false, pending: [] },
       });
+      sendResume(r.resume);
       send('done', { elapsedMs: Date.now() - t0 });
+      if (!r.resume?.canContinue) huntCheckpoints.delete(checkpoint.id);
     }, 15 * 60 * 1000);
   } catch (e) {
-    send('error', { message: e?.message || String(e) });
+    const resume = { id: checkpoint.id, canContinue: true, pending: Object.entries(checkpoint.items)
+      .filter(([, item]) => !item.complete).map(([id]) => ({ id })) };
+    sendResume(resume);
+    send('error', { message: e?.message || String(e), resume });
   } finally {
     task.finish();
   }

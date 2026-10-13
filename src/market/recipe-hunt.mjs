@@ -72,7 +72,7 @@ function searchSpecsFor(plan) {
 /** 按链接的收藏品配额求解，材料磨损根据目标和完整皮肤区间计算。 */
 export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, timeBudgetMs = 30000, wants = 5 }) {
   const { recipePlan: plan, targetWear, statTrak = false, band = 0.03,
-    dataSource, steam, steamPages = 4, buffPages = 3 } = cfg;
+    dataSource, steam, steamPages = 4, buffPages = 3, resumeState = null } = cfg;
   if (!plan?.ok) return { ok: false, error: 'invalid_recipe_plan', message: '缺少有效的分享配方材料清单。' };
   const usesSteam = dataSource === 'steam' || dataSource === 'both';
   const usesBuff = dataSource !== 'steam';
@@ -96,6 +96,23 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
   onProgress(`目标产物「${plan.targetOutput.name}」磨损 ${targetWear}，区间 [${outRange.join(', ')}]；按每种材料的完整区间反推搜索磨损。`);
 
   const pool = [], offers = [], perItem = [], seenOrders = new Set(), assetSlots = new Map();
+  const checkpointItems = resumeState ? (resumeState.items ||= {}) : {};
+  const requests = resumeState ? (resumeState.requests ||= {}) : {};
+  const request = async (key, work) => {
+    signal?.throwIfAborted();
+    if (requests[key]) return requests[key];
+    const result = await work();
+    signal?.throwIfAborted();
+    const hasListings = !Array.isArray(result?.listings) || result.listings.length > 0;
+    if (result.ok && !result.partial && hasListings) requests[key] = result;
+    return result;
+  };
+  const resumeInfo = () => {
+    const pending = materialBands.filter(m => !checkpointItems[m.id]?.complete)
+      .map(m => ({ id: m.id, name: m.name, collection: m.collection }));
+    return { id: resumeState?.id || null, canContinue: !!resumeState && pending.length > 0, pending };
+  };
+  if (resumeState) resumeState.pendingMaterials = materialBands.map(m => ({ id: m.id, name: m.name, collection: m.collection }));
   let cookies = null;
   if (usesSteam) {
     const stored = loadCookies('steam');
@@ -144,62 +161,75 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
     onProgress(`[${index + 1}/${materialBands.length}] ${material.name}${material.count ? ` × ${material.count}` : ''}：材料目标磨损 ${material.targetWear.toFixed(10)}，搜索 [${lo.toFixed(6)}, ${hi.toFixed(6)}]`);
     const errors = [];
     let variants = [];
-    if (usesBuff) {
-      const listed = await buff.listGoods({ search: material.name, pageSize: 50 });
-      if (!listed.ok) errors.push(`BUFF：${listed.kind || '商品查询失败'}`);
-      else variants = listed.items.filter(g => matchesGoods(g, material, statTrak));
-    }
-    if (usesSteam) {
-      if (!material.nameEn && variants[0]?.market_hash_name) material.nameEn = variants[0].market_hash_name;
-      if (!material.nameEn && steam.search) {
-        const found = await steam.search({ query: material.name, count: 20, language: 'schinese' });
-        const match = found.ok && found.results?.find(item => {
-          const flags = nameFlags(item.name);
-          return !!item.name && !flags.souvenir && !flags.knifeOrGlove &&
-            skinIdentity(item.localizedName) === skinIdentity(material.name);
-        });
-        material.nameEn = match?.name || null;
-        if (!found.ok) errors.push(`Steam：${found.error || '商品名称查询失败'}`);
+    try {
+      if (usesBuff) {
+        const listed = await request(`buff:goods:${material.id}`, () => buff.listGoods({ search: material.name, pageSize: 50 }));
+        if (!listed.ok) errors.push(`BUFF：${listed.kind || '商品查询失败'}`);
+        else variants = listed.items.filter(g => matchesGoods(g, material, statTrak));
       }
-      const names = material.nameEn ? steamNames(material, statTrak, lo, hi) :
-        variants.map(g => g.market_hash_name).filter(name => {
-          const exterior = exteriorOf(name);
-          return exterior && intersects(EXTERIOR_RANGE[exterior], lo, hi);
-        });
-      if (!names.length) errors.push('没有确认到该枪皮的 Steam 英文名');
-      for (const name of new Set(names)) {
-        signal?.throwIfAborted();
-        onProgress(`  抓取 ${name} 的 Steam 挂单 ...`);
-        const result = await steam.listingsWithFloats(name, { cookies, pages: steamPages });
-        if (!result.ok) {
-          errors.push(`Steam：${result.error || '挂单查询失败'}`);
-          if (dataSource === 'steam' && /重定向(?:循环|次数超过)/.test(String(result.error))) {
-            return { ok: false, error: 'steam_redirect_loop', message: result.error, perItem };
-          }
-          continue;
+      if (usesSteam) {
+        if (!material.nameEn && variants[0]?.market_hash_name) material.nameEn = variants[0].market_hash_name;
+        if (!material.nameEn && steam.search) {
+          const found = await request(`steam:search:${material.id}`, () => steam.search({ query: material.name, count: 20, language: 'schinese' }));
+          const match = found.ok && found.results?.find(item => {
+            const flags = nameFlags(item.name);
+            return !!item.name && !flags.souvenir && !flags.knifeOrGlove &&
+              skinIdentity(item.localizedName) === skinIdentity(material.name);
+          });
+          material.nameEn = match?.name || null;
+          if (!found.ok) errors.push(`Steam：${found.error || '商品名称查询失败'}`);
         }
-        for (const listing of result.listings) addListing(listing, material, name, undefined, 'steam');
-      }
-    }
-    if (usesBuff) {
-      for (const variant of variants) {
-        const exterior = exteriorOf(variant.name) || exteriorOf(variant.market_hash_name);
-        if (!exterior || !intersects(EXTERIOR_RANGE[exterior], lo, hi)) continue;
-        onProgress(`  抓取 ${variant.name} 的 BUFF 挂单 ...`);
-        for (let page = 1; page <= buffPages; page++) {
+        const names = material.nameEn ? steamNames(material, statTrak, lo, hi) :
+          variants.map(g => g.market_hash_name).filter(name => {
+            const exterior = exteriorOf(name);
+            return exterior && intersects(EXTERIOR_RANGE[exterior], lo, hi);
+          });
+        if (!names.length) errors.push('没有确认到该枪皮的 Steam 英文名');
+        for (const name of new Set(names)) {
           signal?.throwIfAborted();
-          const result = await buff.sellOrders({ goodsId: variant.id, minPaintwear: lo, maxPaintwear: hi,
-            sortBy: 'price.asc', pageSize: 60, pageNum: page });
-          if (!result.ok) { errors.push(`BUFF：${result.kind || '挂单查询失败'}`); break; }
-          for (const listing of result.listings) addListing(listing, material, variant.market_hash_name, variant.id, 'buff');
-          if (!result.listings.length || (result.totalPage && page >= result.totalPage) ||
-              (result.total != null && page * 60 >= result.total)) break;
+          onProgress(`  抓取 ${name} 的 Steam 挂单 ...`);
+          const pageState = resumeState ? ((resumeState.steamPages ||= {})[name] ||= {}) : null;
+          const result = await request(`steam:listings:${name}`, () =>
+            steam.listingsWithFloats(name, { cookies, pages: steamPages, resumeState: pageState }));
+          for (const listing of result.listings || []) addListing(listing, material, name, undefined, 'steam');
+          if (!result.ok || result.partial) {
+            errors.push(`Steam：${result.error || '挂单查询失败'}`);
+            if (dataSource === 'steam' && /重定向(?:循环|次数超过)/.test(String(result.error))) {
+              return { ok: false, error: 'steam_redirect_loop', message: result.error, perItem, resume: resumeInfo() };
+            }
+            continue;
+          }
         }
       }
+      if (usesBuff) {
+        for (const variant of variants) {
+          const exterior = exteriorOf(variant.name) || exteriorOf(variant.market_hash_name);
+          if (!exterior || !intersects(EXTERIOR_RANGE[exterior], lo, hi)) continue;
+          onProgress(`  抓取 ${variant.name} 的 BUFF 挂单 ...`);
+          for (let page = 1; page <= buffPages; page++) {
+            signal?.throwIfAborted();
+            const result = await request(`buff:orders:${variant.id}:${page}`, () =>
+              buff.sellOrders({ goodsId: variant.id, minPaintwear: lo, maxPaintwear: hi,
+                sortBy: 'price.asc', pageSize: 60, pageNum: page }));
+            if (!result.ok) { errors.push(`BUFF：${result.kind || '挂单查询失败'}`); break; }
+            for (const listing of result.listings) addListing(listing, material, variant.market_hash_name, variant.id, 'buff');
+            if (!result.listings.length || (result.totalPage && page >= result.totalPage) ||
+                (result.total != null && page * 60 >= result.total)) break;
+          }
+        }
+      }
+    } catch (e) {
+      signal?.throwIfAborted();
+      errors.push(`请求异常：${e?.message || String(e)}`);
     }
     const available = pool.filter(l => l.recipeMaterialId === material.id).length;
-    perItem.push({ name: material.name, collection: material.collection, group: material.quotaGroupId,
-      required: material.count || 0, available, errors });
+    const itemResult = { name: material.name, collection: material.collection, group: material.quotaGroupId,
+      required: material.count || 0, available, errors };
+    perItem.push(itemResult);
+    if (resumeState) {
+      signal?.throwIfAborted();
+      resumeState.items[material.id] = { complete: errors.length === 0 && available > 0, perItem: itemResult };
+    }
     onProgress(`  ${material.name}：找到 ${available} 件不同的真实材料${material.count ? `，需要 ${material.count} 件` : ''}${errors.length ? `（${errors.join('；')}）` : ''}`);
   }
   const shortages = plan.collectionSpecs
@@ -209,6 +239,7 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
     : perItem.filter(m => m.available < m.required);
   if (shortages.length) return {
     ok: false, error: 'not_enough_recipe_materials', poolSize: pool.length, perItem,
+    resume: resumeInfo(),
     message: (plan.collectionSpecs ? '链接指定的收藏品配额不足：' : '链接指定的材料不足：') +
       shortages.map(m => `「${m.name || m.collection}」需要 ${m.required || m.count} 把，只找到 ${m.available} 把` +
         (m.errors?.length ? `（${m.errors.join('；')}）` : '')).join('；') + '。可调大磨损搜索半径或增加抓取页数后重试。',
@@ -244,7 +275,7 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
       targetOutput: plan.targetOutput.name, cost: picks.reduce((sum, m) => sum + m.price, 0),
       dataSource, statTrak, materials: dataSource === 'both' ? attachOffers(picks, offers) : picks };
   }).sort((a, b) => a.score - b.score || a.cost - b.cost);
-  if (!recipes.length) return { ok: false, error: 'no_recipe_solution', message: '在指定材料数量和搜索范围内未找到可用组合。' };
+  if (!recipes.length) return { ok: false, error: 'no_recipe_solution', message: '在指定材料数量和搜索范围内未找到可用组合。', resume: resumeInfo() };
   return {
     ok: true, dataSource, collectionName: plan.collection, materialGrade: plan.grade,
     outRange, targetOutput: plan.targetOutput.name, materialCount: materialBands.length,
@@ -256,5 +287,6 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
     poolSize: pool.length, exactFound: recipes.some(r => r.exact), bestScore: recipes[0].score,
     marketCounts: { buff: pool.filter(m => m.market === 'buff').length, steam: pool.filter(m => m.market === 'steam').length },
     statTrak, perItem, steamItems: usesSteam ? { perItem } : null, ieee754: ieee754Info(targetWear), recipes,
+    resume: resumeInfo(),
   };
 }

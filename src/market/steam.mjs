@@ -292,14 +292,17 @@ export class SteamMarket {
    *   cookies 可选，带上登录态可降低风控概率
    * @returns {Promise<{ok:boolean, listings:Array, error?:string, diag?:object, pagesFetched?:number}>}
    */
-  async listingsWithFloats(marketHashName, { cookies = null, pages = 3 } = {}) {
-    const collected = [];
+  async listingsWithFloats(marketHashName, { cookies = null, pages = 3, resumeState = null } = {}) {
+    const collected = Array.isArray(resumeState?.listings) ? [...resumeState.listings] : [];
     const seen = new Set();
+    for (const l of collected) if (l?.listingId) seen.add(l.listingId);
     let diag = null;
     let pagesFetched = 0;
     let rateLimited = false;
 
-    for (let page = 0; page < Math.max(1, pages); page++) {
+    const requestedPages = Math.max(1, pages);
+    const firstPage = Math.max(0, Number(resumeState?.nextPage) || 0);
+    for (let page = firstPage; page < requestedPages; page++) {
       this.signal?.throwIfAborted();
       const start = page * 20;
       const base = `${ORIGIN}/market/listings/730/${encodeURIComponent(marketHashName)}`;
@@ -316,8 +319,9 @@ export class SteamMarket {
         r = await this.fetch(url, { headers, retries: 2, timeoutMs: 40000 });
       } catch (e) {
         this.signal?.throwIfAborted();
-        if (page === 0) return { ok: false, error: `请求挂单页失败：${e.message}`, listings: [] };
-        break;
+          if (page === 0 && !collected.length) return { ok: false, error: `请求挂单页失败：${e.message}`, listings: [] };
+          if (resumeState) { resumeState.listings = collected; resumeState.nextPage = page; }
+          return { ok: true, partial: true, error: `请求挂单页失败：${e.message}`, listings: collected, pagesFetched };
       }
 
       // 500/429/503 是 Steam（或中间人）在**限流**，不是"网络不通"，
@@ -333,23 +337,25 @@ export class SteamMarket {
         }
         if (!recovered) {
           rateLimited = true;
-          if (page === 0) {
+          if (page === 0 && !collected.length) {
             return {
               ok: false, status: r.status, rateLimited: true,
               error: `Steam 返回 ${r.status}（限流）—— 请求太快，与代理配置无关。请稍后重试，或减少抓取页数。`,
               listings: [], htmlLen: (r.body || '').length,
             };
           }
-          break;
+          if (resumeState) { resumeState.listings = collected; resumeState.nextPage = page; }
+          return { ok: true, partial: true, error: `Steam 返回 ${r.status}（限流）`, listings: collected, pagesFetched };
         }
       }
 
       const html = r.body || '';
       if (r.status !== 200) {
-        if (page === 0) {
+        if (page === 0 && !collected.length) {
           return { ok: false, status: r.status, error: `HTTP ${r.status}`, listings: [], htmlLen: html.length };
         }
-        break;
+        if (resumeState) { resumeState.listings = collected; resumeState.nextPage = page; }
+        return { ok: true, partial: true, error: `HTTP ${r.status}`, listings: collected, pagesFetched };
       }
 
       const parsed = parseValveSsrListings(html);
@@ -364,12 +370,13 @@ export class SteamMarket {
         };
       }
       if (!parsed.ok) {
-        if (page === 0) {
+        if (page === 0 && !collected.length) {
           return {
             ok: false, error: `页面结构无法解析（${parsed.error}）`, diag, listings: [],
           };
         }
-        break;
+        if (resumeState) { resumeState.listings = collected; resumeState.nextPage = page; }
+        return { ok: true, partial: true, error: `页面结构无法解析（${parsed.error}）`, listings: collected, pagesFetched };
       }
 
       for (const l of [...parsed.listings, ...parsed.pendingListings]) {
@@ -386,6 +393,7 @@ export class SteamMarket {
       if (parsed.rawTotal && start + 20 >= parsed.rawTotal) break;
     }
 
+    if (resumeState) { resumeState.listings = collected; resumeState.nextPage = requestedPages; }
     return {
       ok: true,
       listings: collected,
@@ -407,3 +415,5 @@ export class SteamMarket {
     };
   }
 }
+
+\r\n

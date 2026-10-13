@@ -246,15 +246,16 @@ async function handleHunt(req, res, url) {
         discardCheckpoint();
         return;
       }
-      send('stage', { stage: 'recipe', message: '正在读取 CS2UP 配方中的材料种类与数量 ...' });
+      send('stage', { stage: 'recipe', message: checkpoint.recipe ? '复用已读取的 CS2UP 配方，继续未完成搜索 ...' : '正在读取 CS2UP 配方中的材料种类与数量 ...' });
       sendResume({ id: checkpoint.id, canContinue: true, pending: [] });
-      const recipe = await fetchShareRecipe(link, { signal: task.signal });
+      const recipe = checkpoint.recipe || await fetchShareRecipe(link, { signal: task.signal });
       task.check();
       if (!recipe.ok) { send('error', { message: recipe.message, code: recipe.error }); discardCheckpoint(); return; }
       const located = locateCollection(recipe);
       if (!located.ok) { send('error', { message: located.message, code: located.error }); discardCheckpoint(); return; }
       const statTrak = qualityParam === '1' ? true : qualityParam === '0' ? false : recipe.statTrak;
       const loc = planWithQuality(located, statTrak);
+      checkpoint.recipe = recipe;
 
       send('located', {
         sid: recipe.sid,
@@ -378,7 +379,8 @@ async function handleHunt(req, res, url) {
       ? checkpoint.pendingMaterials.filter(item => !checkpoint.items[item.id]?.complete)
       : Object.entries(checkpoint.items)
         .filter(([, item]) => !item.complete).map(([id]) => ({ id }));
-    const resume = { id: checkpoint.id, canContinue: pending.length > 0, pending };
+    const resume = { id: checkpoint.id,
+      canContinue: !checkpoint.pendingMaterials || pending.length > 0, pending };
     sendResume(resume);
     const message = e?.name === 'TimeoutError'
       ? '搜索超时，已保留成功材料。请点击“重试失败项（继续）”，只补抓失败或尚未完成的材料。'

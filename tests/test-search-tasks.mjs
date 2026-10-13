@@ -19,7 +19,7 @@ const ok = (condition, message) => {
 const html = fs.readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
 const stopCode = html.slice(html.indexOf("let MARKET = 'buff';"), html.indexOf("$('stop').onclick = stopSearch;"));
 const goCode = html.slice(html.indexOf("$('go').onclick ="), html.indexOf('function openBuyPanel'));
-const elements = Object.fromEntries(['link', 'wear', 'go', 'stop', 'band', 'interval', 'insecure', 'proxy', 'stattrak']
+const elements = Object.fromEntries(['link', 'wear', 'go', 'stop', 'continue', 'band', 'interval', 'insecure', 'proxy', 'stattrak', 'qualityNote']
   .map(id => [id, { style: {}, value: '', checked: true }]));
 elements.link.value = '7928752d714f8e31';
 elements.wear.value = '0.2';
@@ -29,7 +29,7 @@ let acknowledgeCancel;
 class FakeEventSource {
   static CLOSED = 2;
   handlers = {};
-  constructor() { sources.push(this); }
+  constructor(url) { this.url = url; sources.push(this); }
   close() { this.readyState = FakeEventSource.CLOSED; }
   addEventListener(type, handler) { this.handlers[type] = handler; }
 }
@@ -52,6 +52,32 @@ elements.go.onclick();
 const statusCount = statuses.length;
 sources[0].handlers.error({ data: '{"message":"old error"}' });
 ok(elements.go.disabled && statuses.length === statusCount, '旧搜索的迟到错误不影响新搜索按钮和状态');
+
+// 错误事件结束当前 SSE 后，恢复按钮仍必须可见；继续请求沿用首次搜索的品质参数。
+page.qualitySid = '7928752d714f8e31';
+elements.stattrak.checked = true;
+elements.go.onclick();
+const initialRetryable = sources[2];
+ok(new URLSearchParams(initialRetryable.url.split('?')[1]).get('stattrak') === '1', '首次搜索记录显式暗金参数');
+initialRetryable.handlers.error({ data: JSON.stringify({
+  message: '搜索超时', resume: { id: 'resume-ui', canContinue: true, pending: [{ id: 'x' }] },
+}) });
+ok(elements.continue.style.display === '', '搜索错误结束后显示重试失败项按钮');
+elements.continue.onclick();
+const retried = sources[3];
+ok(new URLSearchParams(retried.url.split('?')[1]).get('stattrak') === '1', '重试沿用首次搜索的品质参数');
+retried.handlers.error({ data: JSON.stringify({ message: '结束', resume: { id: 'resume-ui', canContinue: false } }) });
+page.qualitySid = null;
+elements.go.onclick();
+const autoQualitySearch = sources[4];
+autoQualitySearch.handlers.located({ data: JSON.stringify({ sid: '7928752d714f8e31', statTrak: true, collectionSpecs: [] }) });
+autoQualitySearch.handlers.error({ data: JSON.stringify({ message: '搜索超时', resume: { id: 'auto-quality-resume', canContinue: true } }) });
+elements.continue.onclick();
+const autoQualityRetryParams = new URLSearchParams(sources[5].url.split('?')[1]);
+ok(autoQualityRetryParams.get('resume_id') === 'auto-quality-resume' && !autoQualityRetryParams.has('stattrak'),
+  '配方自动识别品质后继续仍沿用原始参数，不改变断点签名');
+sources[5].handlers.done({ data: JSON.stringify({ elapsedMs: 10 }) });
+ok(elements.continue.style.display === '', '带待重试项的结果结束后仍显示继续入口');
 
 const response = () => {
   const r = new EventEmitter();

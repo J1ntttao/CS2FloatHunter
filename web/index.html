@@ -509,6 +509,7 @@ $('link').addEventListener('input', qualityInputChanged);
 
 function invalidateResume() {
   if (typeof activeResumeId !== 'undefined') activeResumeId = null;
+  if (typeof activeSearchQualityParam !== 'undefined') activeSearchQualityParam = null;
   if (typeof continueButton !== 'undefined' && continueButton) continueButton.style.display = 'none';
 }
 
@@ -522,6 +523,7 @@ let MARKET = 'buff';
 let activeES = null;
 let activeTaskId = null;
 let activeResumeId = null;
+let activeSearchQualityParam = null;
 const continueButton = $('continue');
 
 function setResume(info) {
@@ -642,9 +644,13 @@ function startSearch({ resume = false } = {}) {
     insecure: $('insecure').checked ? '1' : '0',
   });
   const qualitySearchSid = qualityInputSid();
-  if (qualitySearchSid && (qualitySid === qualitySearchSid || qualityOverrideSid === qualitySearchSid)) {
-    qs.set('stattrak', $('stattrak').checked ? '1' : '0');
-  }
+  const qualityParam = resume
+    ? activeSearchQualityParam
+    : qualitySearchSid && (qualitySid === qualitySearchSid || qualityOverrideSid === qualitySearchSid)
+      ? ($('stattrak').checked ? '1' : '0')
+      : null;
+  if (qualityParam != null) qs.set('stattrak', qualityParam);
+  if (!resume) activeSearchQualityParam = qualityParam;
   activeTaskId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
   qs.set('task_id', activeTaskId);
   if (resume && activeResumeId) qs.set('resume_id', activeResumeId);
@@ -661,6 +667,7 @@ function startSearch({ resume = false } = {}) {
     activeES = null; activeTaskId = null;
     $('go').disabled = false; $('stop').style.display = 'none';
     $('stattrak').disabled = false;
+    if (continueButton && activeResumeId) continueButton.style.display = '';
   };
   listen('stage', e => statusLine(JSON.parse(e.data).message, 'act'));
   listen('progress', e => statusLine(JSON.parse(e.data).message));

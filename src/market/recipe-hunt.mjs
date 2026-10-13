@@ -103,8 +103,8 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
     if (requests[key]) return requests[key];
     const result = await work();
     signal?.throwIfAborted();
-    const hasListings = !Array.isArray(result?.listings) || result.listings.length > 0;
-    if (result.ok && !result.partial && hasListings) requests[key] = result;
+    // 正常返回空列表也已搜索完成，不能在重试其它失败项时重复抓取。
+    if (result.ok && !result.partial) requests[key] = result;
     return result;
   };
   const resumeInfo = () => {
@@ -167,6 +167,15 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
 
   for (const [index, material] of materialBands.entries()) {
     signal?.throwIfAborted();
+    const saved = checkpointItems[material.id];
+    if (saved?.complete && Array.isArray(saved.candidates)) {
+      for (const listing of saved.candidates) {
+        addListing(listing, material, listing.marketHashName, listing.goodsId, listing.market);
+      }
+      perItem.push(saved.perItem);
+      onProgress(`[${index + 1}/${materialBands.length}] ${material.name}：复用已完成搜索，${saved.perItem.available} 件材料`);
+      continue;
+    }
     const [lo, hi] = material.band;
     onProgress(`[${index + 1}/${materialBands.length}] ${material.name}${material.count ? ` × ${material.count}` : ''}：材料目标磨损 ${material.targetWear.toFixed(10)}，搜索 [${lo.toFixed(6)}, ${hi.toFixed(6)}]`);
     const errors = [];
@@ -241,7 +250,8 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
     perItem.push(itemResult);
     if (resumeState) {
       signal?.throwIfAborted();
-      resumeState.items[material.id] = { complete: errors.length === 0 && available > 0, perItem: itemResult };
+      resumeState.items[material.id] = { complete: errors.length === 0, perItem: itemResult,
+        candidates: offers.filter(listing => listing.recipeMaterialId === material.id) };
     }
     onProgress(`  ${material.name}：找到 ${available} 件不同的真实材料${material.count ? `，需要 ${material.count} 件` : ''}${errors.length ? `（${errors.join('；')}）` : ''}`);
   }

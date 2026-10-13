@@ -166,6 +166,22 @@ assert.equal(timeoutCalls.length, timeoutCallsBeforeRetry);
 assert.equal(retrySteam.queried.length, 1);
 console.log('✓ 搜索超时后保存未完成材料，重试只补抓该材料并复用已完成请求');
 
+// 成功的空结果也是已完成项，重试其它失败材料时必须复用。
+const emptyState = { id: 'empty-resume', items: {} };
+const emptyRetryCalls = [];
+await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001, resumeState: emptyState,
+  steam: { async listingsWithFloats(name) {
+    if (name.startsWith(plan.materialSpecs[2].nameEn)) return { ok: false, error: 'HTTP 429', listings: [] };
+    return { ok: true, listings: [] };
+  } } });
+assert.equal(emptyState.items[plan.materialSpecs[0].id].complete, true);
+assert.equal(emptyState.items[plan.materialSpecs[1].id].complete, true);
+await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001, resumeState: emptyState,
+  steam: { async listingsWithFloats(name) { emptyRetryCalls.push(name); return { ok: true, listings: [] }; } } });
+assert.equal(emptyRetryCalls.length, 1);
+assert.ok(emptyRetryCalls[0].startsWith(plan.materialSpecs[2].nameEn));
+console.log('✓ 成功的空结果也会复用，重试不重复搜索已完成的缺货材料');
+
 const wrongOnly = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001,
   steam: mockSteam(0.2, { wrongOnly: true }) });
 assert.equal(wrongOnly.poolSize, 0);
@@ -340,10 +356,18 @@ await new Promise(resolve => probe.close(resolve));
 const root = new URL('../', import.meta.url);
 const child = spawn(process.execPath, ['--input-type=module', '-e', `
   import fs from 'node:fs';
+  let retryScenario = false, timeoutOnce = true, retryRecipeReads = 0;
+  const completedRequests = new Set();
   const payload = JSON.parse(fs.readFileSync(${JSON.stringify(new URL('ref/cs2up/sample-payload-099784dbf1e1240d.json', root).pathname.replace(/^\/(\w:)/, '$1'))}));
-  globalThis.fetch = async url => new Response(JSON.stringify({ok:true,item:{payload:{...payload,
-    stattrak:String(url).includes('1111111111111111')
-  }}}));
+  globalThis.fetch = async url => {
+    if (String(url).includes('2222222222222222')) {
+      retryScenario = true;
+      if (++retryRecipeReads > 1) throw new Error('重试不应重新读取成功的 CS2UP 配方');
+    }
+    return new Response(JSON.stringify({ok:true,item:{payload:{...payload,
+      stattrak:String(url).includes('1111111111111111')
+    }}}));
+  };
   // 子进程中只模拟 Cookie 文件的读取，不写入或改变用户登录态。
   const readFile = fs.readFileSync.bind(fs);
   fs.readFileSync = (file,...args) => String(file).replaceAll('\\\\','/').endsWith('/data/cookies.manual.buff.json')
@@ -355,6 +379,16 @@ const child = spawn(process.execPath, ['--input-type=module', '-e', `
   const {fetchShareRecipe} = await import(${JSON.stringify(new URL('src/cs2up/recipe.mjs', root).href)});
   const {materialsInCollection} = await import(${JSON.stringify(new URL('src/cs2up/materials.mjs', root).href)});
   const {recommendedWearFor} = await import(${JSON.stringify(new URL('src/tradeup/float.mjs', root).href)});
+  const {SearchTasks} = await import(${JSON.stringify(new URL('src/web/search-tasks.mjs', root).href)});
+  const run = SearchTasks.prototype.start;
+  SearchTasks.prototype.start = function(...args) {
+    const task = run.apply(this, args);
+    if (task) {
+      const execute = task.run;
+      task.run = (work, timeoutMs) => execute(work, args[1] === 'timeout-integration' ? 50 : timeoutMs);
+    }
+    return task;
+  };
   const plan = locateCollection(await fetchShareRecipe('099784dbf1e1240d'));
   const specs = plan.collectionSpecs.flatMap(g => materialsInCollection(g.collection, g.grade).map((m,i)=>({
     ...m, nameEn: plan.materialSpecs.find(s=>s.id===m.key)?.nameEn || 'Test '+g.id+' '+i
@@ -366,9 +400,19 @@ const child = spawn(process.execPath, ['--input-type=module', '-e', `
     const s=specs.find(m=>m.name===query);
     return {ok:true,results:[{name:s.nameEn+' (Field-Tested)',localizedName:s.name+' (久经沙场)'}]};
   };
-  SteamMarket.prototype.listingsWithFloats = async name => {
+  SteamMarket.prototype.listingsWithFloats = async function(name) {
     const stem = name.replace(/^StatTrak™ /, '').replace(/ \\([^)]*\\)$/, '');
     const s=specs.find(m=>m.nameEn===stem);
+    if (retryScenario) {
+      if (completedRequests.has(name)) throw new Error('重复抓取已完成商品：'+name);
+      if (s.key === specs[Math.floor(specs.length / 2)].key && timeoutOnce) {
+        timeoutOnce = false;
+        await new Promise((resolve, reject) => {
+          this.signal.addEventListener('abort', () => reject(this.signal.reason), {once:true});
+        });
+      }
+      completedRequests.add(name);
+    }
     const wear = recommendedWearFor(s.min,s.max,Math.fround(0.2));
     const limit=plan.materialSpecs.some(m=>m.id===s.key)?0:12;
     return {ok:true,listings:Array.from({length:limit},(_,i)=>({listingId:stem+i,assetId:'steam:'+stem+i,marketHashName:name,floatvalue:wear,price:2,currencyId:23}))};
@@ -439,6 +483,21 @@ try {
   verifyCollectionResult({ ...bothResult, ok: true }, collectionPlan, 0.2);
   assert.ok(bothResult.recipes[0].materials.every(m => m.marketOffers.buff && m.marketOffers.steam && m.cheaperMarket === 'buff'));
   console.log('✓ 真实双市场 SSE 搜索两边真实挂单，输出逐笔磨损、价格、链接和便宜市场');
+  const retryUrl = `http://127.0.0.1:${port}/api/hunt?url=2222222222222222&wear=0.2&band=0.002&market=steam`;
+  const timedOutStream = await (await fetch(retryUrl + '&task_id=timeout-integration')).text();
+  const timeoutError = JSON.parse(timedOutStream.match(/event: error\ndata: ([^\n]+)/)[1]);
+  assert.match(timeoutError.message, /搜索超时/);
+  assert.equal(timeoutError.resume.canContinue, true);
+  assert.ok(timeoutError.resume.pending.length > 0);
+  const retryStream = await (await fetch(retryUrl + '&task_id=retry-integration&resume_id=' + timeoutError.resume.id)).text();
+  assert.ok(!retryStream.includes('event: error'), retryStream);
+  assert.match(retryStream, /复用已读取的 CS2UP 配方/);
+  assert.match(retryStream, /复用已完成搜索/);
+  const retryResult = JSON.parse(retryStream.match(/event: result\ndata: ([^\n]+)/)[1]);
+  assert.ok(retryResult.perItem.every(item => item.errors.length === 0), retryStream);
+  assert.equal(retryResult.resume.canContinue, false);
+  verifyCollectionResult({ ...retryResult, ok: true }, collectionPlan, 0.2);
+  console.log('✓ 真实 SSE 超时后可重试，复用配方、成功挂单和空结果，只补抓未完成商品');
 } finally {
   child.kill();
   if (child.exitCode === null && child.signalCode === null) await once(child, 'exit');

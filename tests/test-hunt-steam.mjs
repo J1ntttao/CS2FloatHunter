@@ -4,6 +4,7 @@
  *   - 每把材料都带皮肤名、Steam 购买链接、来自 Steam 挂单的磨损与价格
  *   - 产物磨损按该区间正确计算
  */
+import assert from 'node:assert/strict';
 import { CollectionHunter } from '../src/market/hunter.mjs';
 import { outputWear } from '../src/tradeup/float.mjs';
 import fs from 'node:fs';
@@ -44,6 +45,35 @@ fixtureMarket.fetch = async () => {
 };
 const laterPage = await fixtureMarket.listingsWithFloats('AUG | Snake Pit (Field-Tested)', { pages: 2 });
 ok(fetched === 2 && laterPage.listings.length === 1, '过滤后第一页为空仍继续抓取第二页');
+
+// 第二页超时后，检查点保留第一页；继续时从第二页开始，不重复请求第一页。
+const pageController = new AbortController();
+const pageState = {};
+const interruptedMarket = new SteamMarket({ minIntervalMs: 0, signal: pageController.signal });
+const interruptedUrls = [];
+interruptedMarket.fetch = async url => {
+  interruptedUrls.push(url);
+  if (url.includes('start=20')) {
+    pageController.abort(new DOMException('搜索超时', 'TimeoutError'));
+    throw pageController.signal.reason;
+  }
+  return { status: 200, body: ssr([parsed.listings.find(l => l.marketHashName === 'AUG | Snake Pit (Field-Tested)').raw]) };
+};
+await assert.rejects(
+  interruptedMarket.listingsWithFloats('AUG | Snake Pit (Field-Tested)', { pages: 3, resumeState: pageState }),
+  e => e.name === 'TimeoutError',
+);
+assert.equal(pageState.nextPage, 1);
+assert.equal(pageState.listings.length, 1);
+const resumedMarket = new SteamMarket({ minIntervalMs: 0 });
+const resumedUrls = [];
+resumedMarket.fetch = async url => {
+  resumedUrls.push(url);
+  return { status: 200, body: ssr([parsed.listings.find(l => l.marketHashName === 'AUG | Snake Pit (Field-Tested)').raw]) };
+};
+const resumedPages = await resumedMarket.listingsWithFloats('AUG | Snake Pit (Field-Tested)', { pages: 3, resumeState: pageState });
+assert.ok(resumedUrls[0].includes('start=20'));
+ok(interruptedUrls.length === 2 && resumedPages.listings.length === 1, 'Steam 页级超时后只从未完成页继续抓取');
 
 // 两个皮肤，各有三个磨损档商品；只有 [0.15,0.35] 档包含目标 0.2004
 const SKINS = ['AUG | 钢铁哨兵', '新星 | 夜雨月台'];

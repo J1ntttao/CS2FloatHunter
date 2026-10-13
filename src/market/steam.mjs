@@ -386,6 +386,12 @@ export class SteamMarket {
         collected.push(l);
       }
       pagesFetched++;
+      // 每页成功后立即落盘到材料检查点；下一页超时/中断时，继续操作从下一页开始，
+      // 不重新抓取已经完成的页面。
+      if (resumeState) {
+        resumeState.listings = collected;
+        resumeState.nextPage = page + 1;
+      }
 
       // 聚合页可能整页都是其它档位，不能因过滤后为空就误判到底。
       if (parsed.rawCount === 0) break;

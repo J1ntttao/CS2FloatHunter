@@ -68,10 +68,10 @@ async function search(options = {}) {
   const { buff, steam, calls } = clients(options);
   hunter.buff = buff;
   const result = await hunter.hunt({ recipePlan: plan, dataSource: 'both', steam, statTrak: !!options.statTrak,
-    targetWear: 0.2, band: 0.002 }, { timeBudgetMs: 1000, wants: 3 });
+    targetWear: 0.2, exteriors: ['ft', 'mw'] }, { timeBudgetMs: 1000, wants: 3 });
   assert.equal(result.ok, true, result.message);
   assert.equal(result.dataSource, 'both');
-  assert.equal(calls.buff.length, 14); assert.equal(calls.steam.length, 14);
+  assert.equal(calls.buff.length, 14); assert.equal(calls.steam.length, 28);
   for (const recipe of result.recipes) {
     assert.deepEqual(plan.collectionSpecs.map(g => recipe.materials.filter(m => m.collectionName === g.collection).length), [7, 3]);
     assert.equal(new Set(recipe.materials.map(m => m.assetId)).size, 10);
@@ -127,7 +127,7 @@ console.log('✓ 暗金开关同时约束两个市场，并同步目标产物名
 const html = fs.readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 new vm.Script(script);
-const render = vm.createContext({ esc: String, money: v => '¥' + v.toFixed(2), wearFmt: v => v.toFixed(10) });
+const render = vm.createContext({ esc: String, money: (v, c = 23) => c === 23 ? '¥' + v.toFixed(2) : `Steam 币种 ${c} ` + v.toFixed(2), wearFmt: v => v.toFixed(10) });
 vm.runInContext(script.slice(script.indexOf('function marketOfferCell'), script.indexOf('function renderResult')), render);
 const card = render.recipeCard(comparable.recipes[0], 0);
 assert.ok(card.includes('<strong>¥1.00</strong>'));
@@ -136,6 +136,10 @@ assert.ok(card.includes('选中挂单总价'));
 assert.ok(!card.includes('Steam 最低价'));
 assert.ok(render.recipeCard(references.recipes[0], 0).includes('参考 · 磨损差'));
 assert.ok(render.recipeCard(partial.recipes[0], 0).includes('本次范围内未找到可用挂单'));
+const foreignCard = render.recipeCard({ ...comparable.recipes[0], dataSource: 'steam', exact: false, cost: null,
+  costByCurrency: [{ currencyId: 1, total: 10 }], materials: comparable.recipes[0].materials.map(m => ({ ...m, currencyId: 1 })) }, 0);
+assert.ok(foreignCard.includes('近似结果') && foreignCard.includes('Steam 币种 1 10.00'));
+assert.ok(!foreignCard.includes('¥'));
 console.log('✓ 实际页面加粗便宜价格，并列真实磨损与链接，明确不同磨损参考和单边缺货');
 
 // 执行暗金默认值的真实事件处理器，覆盖旧请求迟到和手动覆盖。
@@ -171,8 +175,8 @@ assert.equal(elements.stattrak.checked, true);
 console.log('✓ 暗金链接自动勾选、普通链接取消勾选，手动关闭不被覆盖，旧链接迟到不污染新链接');
 
 // 页面搜索请求必须把明确取消也传给服务端，而不是让链接暗金标志重新打开。
-for (const id of ['go', 'stop', 'wear', 'band', 'interval', 'insecure', 'proxy']) elements[id] = { value: '', style: {}, checked: true };
-elements.wear.value = '0.2';
+for (const id of ['go', 'stop', 'next', 'randomPages', 'wear', 'exterior_fn', 'exterior_mw', 'exterior_ft', 'exterior_ww', 'exterior_bs', 'interval', 'insecure', 'proxy']) elements[id] = { value: '', style: {}, checked: true };
+elements.wear.value = '0.2'; elements.randomPages.value = '20';
 const searchUrls = [];
 quality.crypto = { randomUUID: () => 'ui-test' };
 quality.statusLine = quality.reset = quality.renderLocated = quality.renderResult = () => {};

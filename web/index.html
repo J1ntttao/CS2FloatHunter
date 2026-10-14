@@ -20,7 +20,8 @@
 
   /* 侧栏 */
   aside{width:220px;flex:none;background:var(--surface);border-right:1px solid var(--line);
-    padding:28px 20px;display:flex;flex-direction:column;gap:24px}
+    padding:28px 20px;display:flex;flex-direction:column;gap:24px;
+    position:fixed;inset:0 auto 0 0;height:100dvh;overflow-y:auto}
   .brand{font-size:15px;font-weight:300;letter-spacing:.02em;color:var(--fg)}
   .brand span{color:var(--amber);font-family:var(--mono);font-size:11px;
     text-transform:uppercase;letter-spacing:.15em;display:block;margin-top:4px}
@@ -36,7 +37,9 @@
     text-transform:uppercase;letter-spacing:.15em;border-top:1px solid var(--line);padding-top:18px}
 
   /* 主区 */
-  main{flex:1;min-width:0;padding:32px 32px 60px;max-width:1300px}
+  main{flex:1;min-width:0;padding:32px 32px 60px;max-width:1300px;margin-left:220px}
+  .exterior-options{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px}
+  .exterior-options .check{letter-spacing:0;text-transform:none}
   header.top{margin-bottom:28px;border-bottom:1px solid var(--line);padding-bottom:24px}
   h1{margin:0;font-size:28px;font-weight:300;letter-spacing:-.02em;color:var(--fg)}
   .lead{margin-top:6px;font-size:13px;font-weight:300;color:var(--dim);max-width:60ch}
@@ -99,6 +102,7 @@
   .log .line.act{color:var(--amber)}
   .log .line.ok{color:var(--ok)}
   .log .line.bad{color:var(--err)}
+  .search-eta{font-family:var(--mono);font-size:11px;color:var(--amber);min-width:170px}
 
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
     background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden}
@@ -192,10 +196,11 @@
   @media(max-width:860px){
     .shell{flex-direction:column}
     aside{width:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:14px;
-      padding:14px 20px;border-right:none;border-bottom:1px solid var(--line)}
+      padding:14px 20px;border-right:none;border-bottom:1px solid var(--line);
+      position:sticky;inset:auto;top:0;height:auto;z-index:10}
     nav{flex-direction:row;flex-wrap:wrap}
     .side-state,.side-foot{display:none}
-    main{padding:20px 16px 44px}
+    main{padding:20px 16px 44px;margin-left:0}
   }
   @media(prefers-reduced-motion:reduce){
     *{transition:none!important}
@@ -231,27 +236,37 @@
   <section class="card" id="search">
     <h2>搜索条件</h2>
     <label for="link">CS2UP 配方分享链接</label>
-    <input type="text" id="link" placeholder="https://cs2up.cn/share.html?sid=7928752d714f8e31"
-           value="https://cs2up.cn/share.html?sid=7928752d714f8e31">
+    <input type="text" id="link" placeholder="https://cs2up.cn/" value="https://cs2up.cn/">
     <div class="note">保留链接中每个收藏品的投入数量，允许替换为同收藏品、同等级的其它枪皮；材料磨损根据你输入的目标产物磨损重新计算。也可只贴 <code>sid</code>。</div>
     <label class="check"><input type="checkbox" id="stattrak"> 暗金（StatTrak™）</label>
     <div class="note" id="qualityNote">读取链接后自动跟随配方品质，可手动切换。</div>
 
-    <div class="grid3 search-params" style="margin-top:18px">
+    <div class="grid2 search-params" style="margin-top:18px">
       <div>
         <label for="wear">目标产物磨损</label>
-        <input type="number" id="wear" value="0.22222222" step="0.0000001" min="0.000001" max="0.999999">
-      </div>
-      <div>
-        <label for="band">组合磨损搜索半径</label>
-        <input type="number" id="band" value="0.03" step="0.005" min="0" max="1" aria-describedby="bandHelp">
+        <input type="number" id="wear" value="0.20001016" step="0.0000001" min="0.000001" max="0.999999">
       </div>
       <div>
         <label for="interval">请求间隔 (ms)</label>
         <input type="number" id="interval" value="2200" step="100" min="1200" max="8000">
       </div>
+      <div>
+        <label for="randomPages">随机抽选页数</label>
+        <input type="number" id="randomPages" value="20" step="1" min="0" max="500">
+        <div class="note">每把武器的每个品质档独立抽页，默认 20 页；填 0 则顺序抓取。首页用于确认总页数，计入抽页数量。</div>
+      </div>
     </div>
-    <div class="note" id="bandHelp">半径控制首轮目标附近的检索范围；材料磨损偏高时，会定向补抓低磨损材料，按整组平均值求解。</div>
+    <fieldset style="border:0;padding:0;margin:18px 0 0">
+      <legend style="font-size:11px;color:var(--amber)">搜索品质等级（外观磨损，可多选）</legend>
+      <div class="exterior-options">
+        <label class="check"><input type="checkbox" id="exterior_fn"> 崭新出厂 FN · [0, 0.07)</label>
+        <label class="check"><input type="checkbox" id="exterior_mw"> 略有磨损 MW · [0.07, 0.15)</label>
+        <label class="check"><input type="checkbox" id="exterior_ft" checked> 久经沙场 FT · [0.15, 0.38)</label>
+        <label class="check"><input type="checkbox" id="exterior_ww"> 破损不堪 WW · [0.38, 0.45)</label>
+        <label class="check"><input type="checkbox" id="exterior_bs"> 战痕累累 BS · [0.45, 1]</label>
+      </div>
+    </fieldset>
+    <div class="note">按勾选档位搜索每把枪皮的完整 float 区间，并取该枪皮自身上下限的交集；逐页保留真实挂单并拟合，高低磨损可互相补偿。未完成的档位可继续搜索。</div>
 
     <div style="margin-top:20px">
       <label>检索范围</label>
@@ -289,10 +304,12 @@
       <div id="verifyBox" style="margin-top:14px"></div>
     </details>
 
-    <div style="margin-top:24px;display:flex;gap:12px;align-items:center">
+    <div style="margin-top:24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <button id="go">开始搜索</button>
       <button id="stop" class="ghost" style="display:none;border-color:var(--err);color:var(--err)">停止搜索</button>
+      <button id="next" class="ghost" style="display:none;border-color:var(--amber);color:var(--amber)">下一把武器</button>
       <button id="continue" class="ghost" style="display:none;border-color:var(--ok);color:var(--ok)">重试失败项（继续）</button>
+      <span id="eta" class="search-eta" aria-live="polite">预计剩余时间：—</span>
     </div>
     <div class="log" id="status" aria-live="polite"></div>
   </section>
@@ -309,7 +326,8 @@
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const money = v => (v == null || !isFinite(v)) ? '-' : '¥' + Number(v).toFixed(2);
+const money = (v, currencyId = 23) => (v == null || !isFinite(v)) ? '-'
+  : (currencyId === 23 ? '¥' : currencyId == null ? '币种未确认 ' : `Steam 币种 ${currencyId} `) + Number(v).toFixed(2);
 const wearFmt = v => (v == null || !isFinite(v)) ? '-' : Number(v).toFixed(10);
 const MARKET_LABEL = { buff: '仅 BUFF', both: 'BUFF + Steam 比价', steam: '仅 Steam' };
 const MARKET_NOTE = {
@@ -354,7 +372,7 @@ function renderLocated(d) {
 function marketOfferCell(m, market) {
   const offer = m.marketOffers?.[market];
   if (!offer) return '<td class="price"><span class="sub">本次范围内未找到可用挂单</span></td>';
-  const price = m.cheaperMarket === market ? `<strong>${money(offer.price)}</strong>` : money(offer.price);
+  const price = m.cheaperMarket === market ? `<strong>${money(offer.price, offer.currencyId)}</strong>` : money(offer.price, offer.currencyId);
   const label = market === 'steam' ? 'Steam' : 'BUFF';
   return `<td class="price">${price}
     <div class="sub mono">磨损 ${wearFmt(offer.paintwear)}</div>
@@ -363,11 +381,13 @@ function marketOfferCell(m, market) {
 }
 
 function recipeCard(r, idx) {
+  const totalPrice = r.costByCurrency?.length
+    ? r.costByCurrency.map(c => money(c.total, c.currencyId)).join(' + ') + (r.missingPrices ? ` · ${r.missingPrices} 件价格未知` : '') : money(r.cost);
   const fromSteam = r.dataSource === 'steam';
   const fromBoth = r.dataSource === 'both';
   const badge = r.exact
     ? '<span class="badge exact">精确命中</span>'
-    : `<span class="badge near">误差 ${r.score.toExponential(2)}</span>`;
+    : `<span class="badge near">近似结果 · 误差 ${r.score.toExponential(2)}</span>`;
 
   const rows = r.materials.map((m, i) => {
     const name = `<td>${esc(m.name || m.marketHashName || '未知皮肤')}
@@ -384,7 +404,7 @@ function recipeCard(r, idx) {
         <td class="mono" style="color:var(--mute)">${i + 1}</td>
         ${name}
         <td class="mono">${wearFmt(m.paintwear)}${m.paintseed != null ? `<div class="sub">模板 ${esc(m.paintseed)}</div>` : ''}</td>
-        <td class="price">${money(m.price)}
+        <td class="price">${money(m.price, m.currencyId)}
           ${m.url ? `<div><a class="link" href="${esc(m.url)}" target="_blank" rel="noopener">Steam 购买</a></div>` : ''}</td>
       </tr>`;
     }
@@ -418,10 +438,10 @@ function recipeCard(r, idx) {
       ${badge}
       ${fromSteam ? '<span class="badge src">来源 Steam</span>' : ''}
       ${fromBoth ? '<span class="badge src">来源 BUFF + Steam</span>' : ''}
-      <button class="buy-all" onclick="openBuyPanel(this)" data-items='${esc(JSON.stringify(r.materials.filter(m => m.url).map(m => ({n: m.name || m.marketHashName || '?', w: m.paintwear, p: m.price, u: m.url}))))}'>一键购买 ${r.materials.filter(m => m.url).length} 件</button>
+      <button class="buy-all" onclick="openBuyPanel(this)" data-items='${esc(JSON.stringify(r.materials.filter(m => m.url).map(m => ({n: m.name || m.marketHashName || '?', w: m.paintwear, p: m.price, c: m.currencyId, u: m.url}))))}'>一键购买 ${r.materials.filter(m => m.url).length} 件</button>
       <div class="sp">
         <div><span>产物磨损</span><strong>${wearFmt(r.outputWear)}</strong></div>
-        <div><span>${fromBoth ? '选中挂单总价' : fromSteam ? 'Steam 总价' : 'BUFF 总价'}</span><strong>${money(r.cost)}</strong></div>
+        <div><span>${fromBoth ? '选中挂单总价' : fromSteam ? 'Steam 总价' : 'BUFF 总价'}</span><strong>${totalPrice}</strong></div>
       </div>
     </div>
     ${saved}
@@ -448,6 +468,7 @@ function renderResult(d) {
     <span class="sect-label" id="summary">搜索概要</span>
     <section class="card">
       ${ieBox}
+      ${!d.exactFound ? `<div class="msg warn">未精确命中，以下为本次候选中找到的近似组合。实际产物磨损 ${wearFmt(d.recipes[0]?.outputWear)}，目标 ${wearFmt(d.targetWear)}，误差 ${Number(d.bestScore).toExponential(3)}。</div>` : ''}
       ${d.dataSourceNote ? `<div class="msg ${d.dataSource === 'steam' ? 'good' : 'warn'}">${esc(d.dataSourceNote)}</div>` : ''}
       <div class="kpis">
         <div class="kv"><span>数据来源</span><strong>${d.dataSource === 'both' ? 'BUFF + Steam' : d.dataSource === 'steam' ? 'Steam' : 'BUFF'}</strong></div>
@@ -461,8 +482,8 @@ function renderResult(d) {
       </div>
       ${skipped}
       ${(d.collectionSpecs || []).length ? `<div class="note" style="margin-top:16px">固定收藏品数量：${d.collectionSpecs.map(m => `${esc(m.collection)} × ${m.count}`).join('；')}</div>` : ''}
-      ${(d.collectionBands || []).length ? `<details style="margin-top:16px"><summary>查看 ${d.collectionBands.length} 种候选枪皮的磨损搜索范围</summary><div class="note">低磨损与高磨损材料可互相补偿，最终按整组平均归一化磨损求解。<br>${d.collectionBands.map(m => `${esc(m.collection)} · ${esc(m.name)}：组合可用区间 [${m.band.map(v => Number(v).toFixed(6)).join(', ')}]`).join('<br>')}</div></details>` : ''}
-      ${(d.materialBands || []).length ? `<div class="note" style="margin-top:16px">${d.materialBands.map(m => `${esc(m.name)} × ${m.count}：组合可用区间 [${m.band.map(v => Number(v).toFixed(6)).join(', ')}]`).join('<br>')}</div>` : ''}
+      ${(d.collectionBands || []).length ? `<details style="margin-top:16px"><summary>查看 ${d.collectionBands.length} 种候选枪皮的磨损搜索范围</summary><div class="note">低磨损与高磨损材料可互相补偿，最终按整组平均归一化磨损求解。<br>${d.collectionBands.map(m => `${esc(m.collection)} · ${esc(m.name)}：${(m.exteriorRanges || []).map(t => `${esc(t.label)} [${t.range.map(v => Number(v).toFixed(8)).join(', ')}]`).join('；')}`).join('<br>')}</div></details>` : ''}
+      ${(d.materialBands || []).length ? `<div class="note" style="margin-top:16px">${d.materialBands.map(m => `${esc(m.name)} × ${m.count}：${(m.exteriorRanges || []).map(t => `${esc(t.label)} [${t.range.map(v => Number(v).toFixed(8)).join(', ')}]`).join('；')}`).join('<br>')}</div>` : ''}
     </section>
     <span class="sect-label" id="recipes">推荐配方 ${d.recipes.length} 组</span>
     <section class="card" style="padding:0;border:none">
@@ -514,6 +535,7 @@ $('link').addEventListener('input', qualityInputChanged);
 function invalidateResume() {
   if (typeof activeResumeId !== 'undefined') activeResumeId = null;
   if (typeof activeSearchQualityParam !== 'undefined') activeSearchQualityParam = null;
+  if (typeof activeSearchOptions !== 'undefined') activeSearchOptions = null;
   if (typeof continueButton !== 'undefined' && continueButton) continueButton.style.display = 'none';
 }
 
@@ -528,7 +550,49 @@ let activeES = null;
 let activeTaskId = null;
 let activeResumeId = null;
 let activeSearchQualityParam = null;
+let activeSearchExteriors = null;
+let activeSearchOptions = null;
+let currentMaterialId = null;
+const exteriorKeys = ['fn', 'mw', 'ft', 'ww', 'bs'];
 const continueButton = $('continue');
+const nextButton = $('next');
+let etaTimer = null;
+let etaDeadline = 0;
+
+function formatEta(ms) {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const rest = String(seconds % 60).padStart(2, '0');
+  return minutes ? `${minutes}:${rest}` : `0:${rest}`;
+}
+
+function updateEta(ms, detail = {}) {
+  const el = $('eta');
+  if (!el) return;
+  const receivedAt = Date.now();
+  etaDeadline = receivedAt + (Number.isFinite(ms) ? Math.max(0, ms) : 0);
+  if (typeof clearInterval === 'function') clearInterval(etaTimer);
+  const tick = () => {
+    const now = Date.now();
+    const left = etaDeadline - now;
+    const stale = now - receivedAt > 10000 && detail.etaState;
+    const label = stale || detail.etaState === 'reestimating' || (Number.isFinite(ms) && left <= 0)
+      ? '重新估算中…' : !Number.isFinite(ms) ? '计算中…' : `约 ${formatEta(left)}`;
+    const elapsed = Number.isFinite(detail.elapsedMs) ? ` · 已用 ${formatEta(detail.elapsedMs + now - receivedAt)}` : '';
+    const progress = detail.total ? ` · 档位 ${detail.completed}/${detail.total} · 已抓 ${detail.pages || 0} 页` : '';
+    el.textContent = `预计剩余时间：${label}${elapsed}${progress}`;
+  };
+  tick();
+  etaTimer = typeof setInterval === 'function' ? setInterval(tick, 1000) : null;
+}
+
+function clearEta() {
+  if (typeof clearInterval === 'function') clearInterval(etaTimer);
+  etaTimer = null;
+  etaDeadline = 0;
+  const el = $('eta');
+  if (el) el.textContent = '预计剩余时间：—';
+}
 
 function setResume(info) {
   if (!info?.id || !info.canContinue) {
@@ -544,8 +608,10 @@ async function stopSearch() {
   const taskId = activeTaskId;
   if (activeES) { activeES.close(); activeES = null; }
   activeTaskId = null;
+  clearEta();
   $('go').disabled = true;
   $('stop').style.display = 'none';
+  if (nextButton) nextButton.style.display = 'none';
   statusLine('正在停止搜索 ...', 'act');
   try {
     if (taskId) await fetch('/api/cancel', {
@@ -558,11 +624,28 @@ async function stopSearch() {
   $('go').disabled = false;
   $('stattrak').disabled = false;
   $('stop').style.display = 'none';
+  if (nextButton) nextButton.style.display = 'none';
   if (continueButton && activeResumeId) continueButton.style.display = '';
   statusLine('已手动停止搜索', 'bad');
 }
 
+async function nextWeapon() {
+  if (!activeTaskId || !currentMaterialId || !nextButton || nextButton.disabled) return;
+  const materialId = currentMaterialId;
+  let accepted = false;
+  nextButton.disabled = true;
+  try {
+    const r = await fetch('/api/next', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ taskId: activeTaskId, materialId: currentMaterialId || null }) });
+    const data = await r.json();
+    accepted = !!data.skipped;
+    statusLine(data.skipped ? '已标记当前武器，当前页完成后进入下一把。' : '当前没有可跳过的武器。', data.skipped ? 'act' : '');
+  } catch (e) { statusLine('请求下一把武器失败：' + e.message, 'bad'); }
+  finally { if (currentMaterialId === materialId) nextButton.disabled = accepted; }
+}
+
 $('stop').onclick = stopSearch;
+if (nextButton) nextButton.onclick = nextWeapon;
 document.querySelectorAll('#marketSeg button').forEach(b => {
   b.onclick = () => {
     invalidateResume();
@@ -572,7 +655,7 @@ document.querySelectorAll('#marketSeg button').forEach(b => {
     $('marketNote').textContent = MARKET_NOTE[MARKET];
   };
 });
-for (const id of ['link', 'wear', 'band', 'interval']) $(id).addEventListener?.('input', invalidateResume);
+for (const id of ['link', 'wear', 'interval', 'randomPages', ...exteriorKeys.map(k => 'exterior_' + k)]) $(id).addEventListener?.('input', invalidateResume);
 document.querySelectorAll('nav a').forEach(a => {
   a.onclick = () => {
     document.querySelectorAll('nav a').forEach(x => x.classList.remove('on'));
@@ -636,14 +719,22 @@ function startSearch({ resume = false } = {}) {
   const w = $('wear').value.trim();
   if (!link) { statusLine('请填写 CS2UP 配方分享链接', 'bad'); return; }
   if (!w || !(Number(w) > 0 && Number(w) < 1)) { statusLine('目标磨损需在 0 到 1 之间', 'bad'); return; }
-  if (!resume) { activeResumeId = null; reset(); }
+  const selectedExteriors = resume ? activeSearchExteriors : exteriorKeys.filter(k => $('exterior_' + k).checked);
+  if (!selectedExteriors?.length) { statusLine('请至少勾选一个搜索品质等级', 'bad'); return; }
+  const options = resume ? activeSearchOptions : { randomPages: $('randomPages')?.value || '0' };
+  if (!Number.isInteger(Number(options?.randomPages)) || Number(options.randomPages) < 0 || Number(options.randomPages) > 500) { statusLine('请填写有效的随机页数', 'bad'); return; }
+  if (!resume) { activeSearchOptions = options; activeSearchExteriors = selectedExteriors; activeResumeId = null; reset(); }
   $('go').disabled = true;
   $('stop').style.display = '';
+  currentMaterialId = null;
+  if (nextButton) { nextButton.style.display = ''; nextButton.disabled = true; }
+  updateEta(Number.NaN);
   if (continueButton) continueButton.style.display = 'none';
   statusLine(`连接本地服务（${MARKET_LABEL[MARKET]}）`, 'act');
   $('stattrak').disabled = true;
   const qs = new URLSearchParams({
-    url: link, wear: w, band: $('band').value,
+    url: link, wear: w, exteriors: selectedExteriors.join(','),
+    random_pages: options.randomPages,
     interval: $('interval').value, market: MARKET,
     insecure: $('insecure').checked ? '1' : '0',
   });
@@ -669,12 +760,29 @@ function startSearch({ resume = false } = {}) {
     es.close();
     if (activeES !== es) return;
     activeES = null; activeTaskId = null;
+    clearEta();
     $('go').disabled = false; $('stop').style.display = 'none';
+    currentMaterialId = null;
+    if (nextButton) nextButton.style.display = 'none';
     $('stattrak').disabled = false;
     if (continueButton && activeResumeId) continueButton.style.display = '';
   };
-  listen('stage', e => statusLine(JSON.parse(e.data).message, 'act'));
-  listen('progress', e => statusLine(JSON.parse(e.data).message));
+  listen('stage', e => {
+    const d = JSON.parse(e.data);
+    if ('etaMs' in d) updateEta(d.etaMs, d);
+    statusLine(d.message, 'act');
+  });
+  listen('progress', e => {
+    const d = JSON.parse(e.data);
+    if ('etaMs' in d) updateEta(d.etaMs, d);
+    statusLine(d.message);
+  });
+  listen('eta', e => { const d = JSON.parse(e.data); updateEta(d.etaMs, d); });
+  listen('material', e => {
+    const d = JSON.parse(e.data);
+    currentMaterialId = d.type === 'materialStart' ? d.id : null;
+    if (nextButton) nextButton.disabled = !currentMaterialId;
+  });
   listen('resume', e => setResume(JSON.parse(e.data)));
   listen('located', e => {
     const d = JSON.parse(e.data);
@@ -691,10 +799,11 @@ function startSearch({ resume = false } = {}) {
     const d = JSON.parse(e.data);
     if (d.resume) setResume(d.resume);
     renderResult(d);
-    statusLine(d.exactFound ? '搜索完成，已精确命中' : '搜索完成，未精确命中（见最优误差）', 'ok');
+    statusLine(d.resume?.canContinue ? '本轮仍有未完成档位，已展示当前最优组合；可继续搜索。'
+      : d.exactFound ? '搜索完成，已精确命中' : '搜索完成，未精确命中（见最优误差）', d.resume?.canContinue ? 'act' : 'ok');
   });
   listen('done', e => {
-    statusLine(`全部完成，耗时 ${(JSON.parse(e.data).elapsedMs / 1000).toFixed(1)} 秒`, 'ok');
+    statusLine(`${activeResumeId ? '本轮结束，仍有档位可继续' : '全部完成'}，耗时 ${(JSON.parse(e.data).elapsedMs / 1000).toFixed(1)} 秒`, activeResumeId ? 'act' : 'ok');
     finish();
   });
   listen('error', e => {
@@ -720,7 +829,7 @@ function openBuyPanel(btn) {
     <span class="idx">${i + 1}</span>
     <div class="info">
       <div class="nm">${esc(m.n)}</div>
-      <div class="fl">${wearFmt(m.w)}${m.p != null ? ` · ${money(m.p)}` : ''}</div>
+      <div class="fl">${wearFmt(m.w)}${m.p != null ? ` · ${money(m.p, m.c)}` : ''}</div>
     </div>
     <div class="go"><a href="${esc(m.u)}" target="_blank" rel="noopener" onclick="this.classList.add('visited')">购买</a></div>
   </li>`).join('');

@@ -99,9 +99,10 @@ export class CollectionHunter {
    *   - Steam 挂单页按价格排序，未登录只能看有限几页 → 可能出现「附近没有合适磨损」的情况
    *   - 因此这条路径**不保证**能凑齐，凑不齐时必须如实报错，绝不能拿 BUFF 数据顶替
    */
-  async huntFromSteam(cfg, { onProgress = () => {}, timeBudgetMs = 30000, wants = 5 } = {}) {
+  async huntFromSteam(cfg, { onProgress = () => {}, onWork = () => {}, shouldSkip = () => false,
+    timeBudgetMs = 30000, wants = 5 } = {}) {
     if (cfg.recipePlan) return huntRecipe({ ...cfg, dataSource: 'steam' }, {
-      buff: this.buff, signal: this.signal, onProgress, timeBudgetMs, wants,
+      buff: this.buff, signal: this.signal, onProgress, onWork, shouldSkip, timeBudgetMs, wants,
     });
     const {
       collectionName, materialGrade, targetWear, statTrak = false,
@@ -395,9 +396,10 @@ export class CollectionHunter {
    *   band            材料磨损带半径
    *   count           材料数量（默认 10）
    */
-  async hunt(cfg, { onProgress = () => {}, timeBudgetMs = 30000, wants = 5 } = {}) {
+  async hunt(cfg, { onProgress = () => {}, onWork = () => {}, shouldSkip = () => false,
+    timeBudgetMs = 30000, wants = 5 } = {}) {
     if (cfg.recipePlan) return huntRecipe({ ...cfg, dataSource: cfg.dataSource === 'both' ? 'both' : 'buff' }, {
-      buff: this.buff, signal: this.signal, onProgress, timeBudgetMs, wants,
+      buff: this.buff, signal: this.signal, onProgress, onWork, shouldSkip, timeBudgetMs, wants,
     });
     const {
       collectionName, materialGrade, targetWear, statTrak = false,

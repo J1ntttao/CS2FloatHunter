@@ -353,7 +353,14 @@ export function solveCombinations(normPool, cfg) {
   };
 
   const greedySeed = () => {
-    if (quotas) return quotaSeed(false);
+    if (quotas) {
+      if (seedIndices?.length === count && new Set(seedIndices).size === count &&
+          seedIndices.every(i => Number.isInteger(i) && i >= 0 && i < N) &&
+          [...quotas].every(([g, n]) => seedIndices.filter(i => groupOf[i] === g).length === n)) {
+        return [...seedIndices];
+      }
+      return quotaSeed(false);
+    }
     if (seedIndices && seedIndices.length) {
       // 固定种子：保留已指定的材料，其余按“离目标均值最近”补足
       const fixed = new Set(seedIndices);
@@ -423,12 +430,14 @@ export function solveCombinations(normPool, cfg) {
     while (improved && iter < 40 && Date.now() < deadline) {
       improved = false; iter++;
       for (let pos = 0; pos < cur.length; pos++) {
+        if (Date.now() >= deadline) break;
         const oldIdx = cur[pos];
         const oldVal = normPool[cur[pos]];
         let bestIdx = cur[pos], bestScore = curScore;
         const cands = candidatesFor(cur[pos]);
         const list = cands || Array.from({ length: N }, (_, i) => i);
         for (const c of list) {
+          if (Date.now() >= deadline) break;
           if (inSet.has(c)) continue;
           const nv = normPool[c];
           if (nv === oldVal) continue;
@@ -451,6 +460,22 @@ export function solveCombinations(normPool, cfg) {
 
   let exactFound = false;
   const startTime = Date.now();
+  // 即使时间预算已用完，也返回真实、满足配额的最近均值起点。
+  pushIfNew(greedySeed());
+  // 增加各组的低/高边界起点，目标在已抓区间外时也能得到最近的近似组合。
+  const boundarySeed = descending => {
+    const ranked = allowedIdx.slice().sort((a, b) => descending ? normPool[b] - normPool[a] : normPool[a] - normPool[b]);
+    if (!quotas) return ranked.slice(0, count);
+    const used = new Map(), idx = [];
+    for (const i of ranked) {
+      const g = groupOf[i], n = used.get(g) || 0;
+      if (n < quotas.get(g)) { idx.push(i); used.set(g, n + 1); }
+    }
+    return idx;
+  };
+  pushIfNew(boundarySeed(false));
+  pushIfNew(boundarySeed(true));
+  const identicalNorms = allowedIdx.every(i => normPool[i] === normPool[allowedIdx[0]]);
   const searchDeadline = deadline - Math.min(2000, Math.max(0, timeBudgetMs * 0.2));
   for (let t = 0; t < tries; t++) {
     if (t > 0 && Date.now() > searchDeadline) break;
@@ -463,6 +488,7 @@ export function solveCombinations(normPool, cfg) {
     }
     pushIfNew(idx);
     if (s <= targetInfo.minimumScore) { exactFound = s === 0; break; }
+    if (identicalNorms) break;
   }
 
   // 若启发式搜索没能精确命中，且不涉及收藏品约束，就用相遇中点做**确定性**精确求解。

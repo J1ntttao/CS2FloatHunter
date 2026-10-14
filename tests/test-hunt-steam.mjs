@@ -30,11 +30,36 @@ ok(fixtureResult.listings.length === fixtureFt.length && fixtureResult.listings.
 ok(!steamListingMatches({ marketHashName: 'X (Factory New)', floatvalue: 0.2226156443 }, 'X (Factory New)'),
   '0.222 磨损不能冒充崭新出厂');
 ok(!steamListingMatches({ floatvalue: 0.22 }, 'X (Field-Tested)'), '缺少真实商品身份的挂单不参与求解');
+ok(steamListingMatches({ marketHashName: 'X (Battle-Scarred)', floatvalue: 0.85 }, 'X (Field-Tested)',
+  { allowOtherExteriors: true }), '库存采样保留同枪皮高磨损档的真实挂单');
+ok(!steamListingMatches({ marketHashName: 'Other (Battle-Scarred)', floatvalue: 0.85 }, 'X (Field-Tested)',
+  { allowOtherExteriors: true }), '库存采样仍拒绝其它枪皮');
+ok(!steamListingMatches({ marketHashName: 'StatTrak™ X (Battle-Scarred)', floatvalue: 0.85 }, 'X (Field-Tested)',
+  { allowOtherExteriors: true }), '跨外观档采样不混入暗金品质');
 for (const [wear, exterior] of [[0, 'Factory New'], [0.07, 'Minimal Wear'], [0.15, 'Field-Tested'],
   [0.38, 'Well-Worn'], [0.45, 'Battle-Scarred'], [1, 'Battle-Scarred']]) {
   const name = `X (${exterior})`;
   ok(steamListingMatches({ marketHashName: name, floatvalue: Math.fround(wear) }, name), `磨损边界 ${wear} → ${exterior}`);
 }
+const sampledPages = [];
+const sampler = new SteamMarket({ minIntervalMs: 0 });
+sampler.fetch = async () => ({ status: 200, body: fixture });
+const sampled = await sampler.listingsWithFloats('AUG | Snake Pit (Field-Tested)', {
+  pages: 1, minPaintwear: 0.2, maxPaintwear: 0.21, retainOutOfBand: true, allowOtherExteriors: true,
+  onPage: listings => sampledPages.push([...listings]),
+});
+ok(sampled.listings.length > 0 && sampled.listings.some(l => l.floatvalue < 0.2 || l.floatvalue > 0.21),
+  '库存模式保留查询优先区间外的真实挂单');
+ok(sampledPages.length === 1 && sampledPages[0].length === sampled.listings.length,
+  'Steam 每页成功后立即把候选交给增量求解，而非等所有页面抓完');
+let stopPageRequests = 0;
+sampler.fetch = async () => { stopPageRequests++; return { status: 200, body: fixture }; };
+const stopPageState = {};
+const stoppedPages = await sampler.listingsWithFloats('AUG | Snake Pit (Field-Tested)', {
+  pages: 16, resumeState: stopPageState, onPage: () => false,
+});
+ok(stopPageRequests === 1 && stoppedPages.stoppedEarly && stopPageState.nextPage === 1,
+  '增量求解命中后立即停止深翻页，检查点只记录真正完成的页面');
 
 // 第一页全是别的档位时仍须继续翻页，后续页可能才出现目标档位。
 const ssr = listings => `<script id="valve-ssr-data">${JSON.stringify({ listings })}</script>`;

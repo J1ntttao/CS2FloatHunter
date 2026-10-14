@@ -25,7 +25,9 @@
 
 import { httpsGet, proxyFromEnv, makeFetcher, DEFAULT_UA } from '../util/net.mjs';
 import { steamListingUrl } from './inspect.mjs';
+import { skinName } from '../cs2up/location.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
+import { samplePages } from './page-sampling.mjs';
 
 const ORIGIN = 'https://steamcommunity.com';
 export const CNY = 23;
@@ -76,7 +78,11 @@ function listingQuery(name, min, max, sortBy) {
 }
 
 /** 商品身份与挂单实际磨损同时校验，避免聚合页混档或无身份数据被误用。 */
-export function steamListingMatches(listing, marketHashName) {
+export function steamListingMatches(listing, marketHashName, { allowOtherExteriors = false } = {}) {
+  if (allowOtherExteriors && listing.marketHashName &&
+      skinName(listing.marketHashName) === skinName(marketHashName)) {
+    return steamListingMatches(listing, listing.marketHashName);
+  }
   if (!listing.marketHashName || listing.marketHashName !== marketHashName) return false;
   const exterior = marketHashName.match(/\(([^()]*)\)\s*$/)?.[1];
   const range = EXTERIOR_RANGES[exterior];
@@ -135,8 +141,8 @@ export function parseValveSsrListings(html) {
   const listingsGroups = findListingsArrays(outer);
   if (!listingsGroups.length) return { ok: false, error: 'no_listings_in_ssr', outer };
 
-  const raw = listingsGroups[0];
-  const pending = listingsGroups[1] || null;   // 预取的第二页（Steam 常一次注水两页）
+  const raw = listingsGroups[0].listings;
+  const pending = listingsGroups[1]?.listings || null;   // 预取的第二页（Steam 常一次注水两页）
   const listings = raw.map(normalizeListing).filter(Boolean);
   const pendingListings = pending ? pending.map(normalizeListing).filter(Boolean) : [];
   // 顺便带上总数，供翻页判断是否到底
@@ -160,7 +166,7 @@ function findListingsArrays(node, depth = 0, acc = []) {
   }
   if (node && typeof node === 'object') {
     if (Array.isArray(node.listings) && (!node.listings.length || node.listings[0]?.listingid)) {
-      acc.push(node.listings);
+      acc.push({ listings: node.listings, total_count: node.total_count ?? node.totalCount ?? null });
     }
     for (const v of Object.values(node)) findListingsArrays(v, depth + 1, acc);
     return acc;
@@ -189,13 +195,13 @@ function normalizeListing(l) {
   return {
     market: 'steam',
     listingId: String(l.listingid),
-    assetId: l.asset ? String(l.asset.assetid || l.asset.id) : null,
+    assetId: l.asset?.assetid != null ? String(l.asset.assetid) : l.asset?.id != null ? String(l.asset.id) : null,
     floatvalue,
     paintseed,
     price: cents != null ? cents / 100 : null,
     priceCents: cents,
     priceText: l.strSubtotal || (cents != null ? (cents / 100).toFixed(2) : null),
-    currencyId: l.eCurrency != null ? l.eCurrency : null,
+    currencyId: l.eCurrency != null ? Number(l.eCurrency) : null,
     name: description.market_name || null,
     marketHashName: description.market_hash_name || null,
     exterior: description.market_name_inside_group || null,
@@ -320,13 +326,17 @@ export class SteamMarket {
    * @returns {Promise<{ok:boolean, listings:Array, error?:string, diag?:object, pagesFetched?:number}>}
    */
   async listingsWithFloats(marketHashName, { cookies = null, pages = 3, resumeState = null,
-    minPaintwear = null, maxPaintwear = null, sortBy = 'price' } = {}) {
+    minPaintwear = null, maxPaintwear = null, sortBy = 'price', retainOutOfBand = false,
+    allowOtherExteriors = false, randomPages = 0, onPage = () => {}, onWork = () => {} } = {}) {
+    resumeState ||= {};
     const params = listingQuery(marketHashName, minPaintwear, maxPaintwear, sortBy);
-    const signature = `${marketHashName}?${params}`;
+    const signature = `${marketHashName}?${params}${retainOutOfBand ? '&retainOutOfBand=1' : ''}${allowOtherExteriors ? '&allExteriors=1' : ''}&randomPages=${randomPages}`;
     if (resumeState) {
       if (resumeState.signature && resumeState.signature !== signature) {
         resumeState.listings = []; resumeState.nextPage = 0; delete resumeState.baseUrl;
-        delete resumeState.exhausted;
+        delete resumeState.exhausted; delete resumeState.complete;
+        delete resumeState.sampledPages; delete resumeState.fetchedPages; delete resumeState.totalPages;
+        delete resumeState.sampleComplete;
       }
       resumeState.signature = signature;
     }
@@ -336,11 +346,19 @@ export class SteamMarket {
     let diag = null;
     let pagesFetched = 0;
     let rateLimited = false;
+    let stoppedEarly = false;
 
     const requestedPages = Math.max(1, pages);
-    const firstPage = Math.max(0, Number(resumeState?.nextPage) || 0);
-    for (let page = firstPage; page < requestedPages && !resumeState?.exhausted; page++) {
+    const randomTarget = Math.max(0, Math.floor(Number(randomPages) || 0));
+    const firstPage = Math.max(0, Number(resumeState.nextPage) || 0);
+    const fetchedPages = new Set(resumeState.fetchedPages || []);
+    let pageQueue = randomTarget
+      ? (resumeState.sampledPages || [0]).filter(page => !fetchedPages.has(page))
+      : Array.from({ length: Math.max(0, requestedPages - firstPage) }, (_, i) => firstPage + i);
+    if (resumeState.sampleComplete || resumeState.exhausted) return { ok: true, listings: collected, pagesFetched: 0 };
+    for (const page of pageQueue) {
       this.signal?.throwIfAborted();
+      onWork({ type: 'pageStart', page: page + 1 });
       const start = page * 20;
       const base = resumeState?.baseUrl || `${ORIGIN}/market/listings/730/${encodeURIComponent(marketHashName)}`;
       const query = new URLSearchParams(params);
@@ -393,7 +411,8 @@ export class SteamMarket {
             };
           }
           if (resumeState) { resumeState.listings = collected; resumeState.nextPage = page; }
-          return { ok: true, partial: true, error: `Steam 返回 ${r.status}（限流）`, listings: collected, pagesFetched };
+          return { ok: true, partial: true, rateLimited: true, status: r.status,
+            error: `Steam 返回 ${r.status}（限流）`, listings: collected, pagesFetched };
         }
       }
 
@@ -427,38 +446,58 @@ export class SteamMarket {
         return { ok: true, partial: true, error: `页面结构无法解析（${parsed.error}）`, listings: collected, pagesFetched };
       }
 
-      for (const l of [...parsed.listings, ...parsed.pendingListings]) {
-        if (!steamListingMatches(l, marketHashName)) continue;
-        if ((minPaintwear != null && l.floatvalue < minPaintwear) ||
-            (maxPaintwear != null && l.floatvalue > maxPaintwear)) continue;
+      if (parsed.rawTotal != null) resumeState.totalPages = Math.ceil(parsed.rawTotal / 20);
+      const allRows = [...parsed.listings, ...parsed.pendingListings];
+      for (const l of allRows) {
+        if (!steamListingMatches(l, marketHashName, { allowOtherExteriors })) continue;
+        if (!retainOutOfBand && ((minPaintwear != null && l.floatvalue < minPaintwear) ||
+            (maxPaintwear != null && l.floatvalue > maxPaintwear))) continue;
         if (seen.has(l.listingId)) continue;
         seen.add(l.listingId);
         collected.push(l);
       }
+      if (randomTarget && page === 0 && !resumeState.sampledPages) {
+        if (resumeState.totalPages) resumeState.sampledPages = samplePages(resumeState.totalPages, randomTarget);
+        else if (parsed.rawCount === 0) resumeState.sampledPages = [0];
+        else {
+          resumeState.listings = collected;
+          return { ok: true, partial: true, listings: collected, error: 'Steam 未提供总页数，无法随机抽页；已保留第一页，可继续重试。' };
+        }
+        pageQueue.push(...resumeState.sampledPages.filter(p => p !== 0 && !fetchedPages.has(p)));
+      }
       pagesFetched++;
+      onWork({ type: 'pageDone', page: page + 1, totalPages: randomTarget
+        ? Math.min(randomTarget, resumeState.totalPages || randomTarget) : resumeState.totalPages || null });
       // 每页成功后立即落盘到材料检查点；下一页超时/中断时，继续操作从下一页开始，
       // 不重新抓取已经完成的页面。
       if (resumeState) {
         resumeState.listings = collected;
         resumeState.nextPage = page + 1;
+        if (randomTarget) { fetchedPages.add(page); resumeState.fetchedPages = [...fetchedPages]; }
       }
+      if (await onPage(collected) === false) { stoppedEarly = true; break; }
 
       // 聚合页可能整页都是其它档位，不能因过滤后为空就误判到底。
-      if (parsed.rawCount === 0) { if (resumeState) resumeState.exhausted = true; break; }
+      if (parsed.rawCount === 0 && !randomTarget) { resumeState.exhausted = true; break; }
       // 已抓到的数量达到总量也停
-      if (parsed.rawTotal && start + 20 >= parsed.rawTotal) {
+      if (parsed.rawTotal && !randomTarget && start + 20 >= parsed.rawTotal) {
         if (resumeState) resumeState.exhausted = true;
         break;
       }
     }
 
-    if (resumeState) { resumeState.listings = collected; resumeState.nextPage = requestedPages; }
+    if (resumeState) {
+      resumeState.listings = collected;
+      if (!stoppedEarly && !resumeState.exhausted && !randomTarget) resumeState.nextPage = requestedPages;
+      if (randomTarget && resumeState.sampledPages?.every(p => fetchedPages.has(p))) resumeState.sampleComplete = true;
+    }
     return {
       ok: true,
       listings: collected,
       diag,
       pagesFetched,
       rateLimited,
+      stoppedEarly, sampleComplete: resumeState.sampleComplete || false,
       withFloat: collected.filter(l => l.floatvalue != null).length,
     };
   }

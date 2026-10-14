@@ -58,7 +58,7 @@ function verifyResult(result, target) {
     assert.ok(rec.score < 1e-6);
     assert.equal(rec.outputs.length, 6);
     assert.equal(rec.outputs.find(o => o.name === 'AWP | 金粉肆蛇').wear, outputWear(math, 0, 0.8));
-    assert.equal(rec.cost, rec.materials.reduce((n, m) => n + m.price, 0));
+    assert.equal(rec.cost, rec.materials.every(m => m.currencyId === 23) ? rec.materials.reduce((n, m) => n + m.price, 0) : null);
   }
 }
 
@@ -72,7 +72,7 @@ function mockSteam(target, { shortage = false, wrongOnly = false } = {}) {
       .map(l => ({ ...l, marketHashName: wrongOnly ? 'P90 | Neoqueen (Field-Tested)' : name }));
     return { ok: true, pagesFetched: 1, listings: [...items, items[0], { ...items[0], listingId: 'duplicate-asset' },
       { ...items[0], listingId: 'wrong-skin', assetId: 'wrong-skin', marketHashName: 'P90 | Neoqueen (Field-Tested)', price: 0.01 },
-      { ...items[0], listingId: 'usd', assetId: 'usd', currencyId: 1 },
+      ...(!shortage ? [{ ...items[0], listingId: 'usd', assetId: 'usd', currencyId: 1 }] : []),
     ] };
   } };
 }
@@ -81,9 +81,9 @@ hunter._materialsInCollection = () => { throw new Error('严格模式不能枚�
 hunter.buff = { listGoods: () => { throw new Error('分享链接已有英文名，不应查 BUFF'); } };
 for (const target of [0.2, 0.7]) {
   const steam = mockSteam(target);
-  const result = await hunter.huntFromSteam({ recipePlan: plan, targetWear: target, band: 0.001, steam }, { timeBudgetMs: 1000, wants: 3 });
+  const result = await hunter.huntFromSteam({ recipePlan: plan, targetWear: target, exteriors: [target === 0.2 ? 'ft' : 'bs'], steam }, { timeBudgetMs: 1000, wants: 3 });
   verifyResult(result, target);
-  assert.equal(result.poolSize, 36);
+  assert.equal(result.poolSize, 37, '外币挂单的真实 float 也保留，不混入人民币总价');
   assert.ok(steam.queried.every(n => n.endsWith(`(${target === 0.2 ? 'Field-Tested' : 'Battle-Scarred'})`)));
   for (const m of result.recipes[0].materials) {
     assert.equal(new URL(m.url).searchParams.get('detail'), m.listingId);
@@ -91,7 +91,7 @@ for (const target of [0.2, 0.7]) {
   }
   console.log(`✓ 仅 Steam 目标 ${target}：只查询指定枪皮，重新计算磨损及外观，固定 6 / 3 / 1，去重与购买定位有效`);
 }
-const tooFew = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001,
+const tooFew = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, exteriors: ['ft'],
   steam: mockSteam(0.2, { shortage: true }) });
 assert.equal(tooFew.error, 'not_enough_recipe_materials');
 assert.ok(tooFew.poolSize >= 10);
@@ -113,14 +113,14 @@ const flakySteam = {
     return { ok: true, pagesFetched: 1, listings: candidates(material, 0.2).map(l => ({ ...l, marketHashName: name })) };
   },
 };
-const interrupted = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001,
+const interrupted = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, exteriors: ['ft'],
   steam: flakySteam, resumeState });
 assert.equal(interrupted.error, 'not_enough_recipe_materials');
 assert.equal(resumeState.items.R8左轮手枪_蕉农炮.complete, true);
 assert.equal(resumeState.items.MAC_10_错觉.complete, true);
 assert.equal(resumeState.items.UMP_45_连续体.complete, false);
 const callsBeforeResume = flakyCalls.length;
-const resumed = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001,
+const resumed = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, exteriors: ['ft'],
   steam: flakySteam, resumeState }, { timeBudgetMs: 1000 });
 verifyResult(resumed, 0.2);
 assert.equal(flakyCalls.length - callsBeforeResume, 1);
@@ -148,7 +148,7 @@ const timeoutSteam = {
 };
 await assert.rejects(
   new CollectionHunter({ intervalMs: 0, signal: timeoutController.signal }).huntFromSteam({
-    recipePlan: plan, targetWear: 0.2, band: 0.001, steam: timeoutSteam, resumeState: timeoutState,
+    recipePlan: plan, targetWear: 0.2, exteriors: ['ft'], steam: timeoutSteam, resumeState: timeoutState,
   }),
   e => e.name === 'TimeoutError',
 );
@@ -159,7 +159,7 @@ assert.ok(timeoutState.pendingMaterials.some(item => item.id === 'UMP_45_连续�
 const timeoutCallsBeforeRetry = timeoutCalls.length;
 const retrySteam = mockSteam(0.2);
 const retried = await new CollectionHunter({ intervalMs: 0 }).huntFromSteam({
-  recipePlan: plan, targetWear: 0.2, band: 0.001, steam: retrySteam, resumeState: timeoutState,
+  recipePlan: plan, targetWear: 0.2, exteriors: ['ft'], steam: retrySteam, resumeState: timeoutState,
 }, { timeBudgetMs: 1000 });
 verifyResult(retried, 0.2);
 assert.equal(timeoutCalls.length, timeoutCallsBeforeRetry);
@@ -169,20 +169,20 @@ console.log('✓ 搜索超时后保存未完成材料，重试只补抓该材料
 // 成功的空结果也是已完成项，重试其它失败材料时必须复用。
 const emptyState = { id: 'empty-resume', items: {} };
 const emptyRetryCalls = [];
-await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001, resumeState: emptyState,
+await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, exteriors: ['ft'], resumeState: emptyState,
   steam: { async listingsWithFloats(name) {
     if (name.startsWith(plan.materialSpecs[2].nameEn)) return { ok: false, error: 'HTTP 429', listings: [] };
     return { ok: true, listings: [] };
   } } });
 assert.equal(emptyState.items[plan.materialSpecs[0].id].complete, true);
 assert.equal(emptyState.items[plan.materialSpecs[1].id].complete, true);
-await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001, resumeState: emptyState,
+await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, exteriors: ['ft'], resumeState: emptyState,
   steam: { async listingsWithFloats(name) { emptyRetryCalls.push(name); return { ok: true, listings: [] }; } } });
 assert.equal(emptyRetryCalls.length, 1);
 assert.ok(emptyRetryCalls[0].startsWith(plan.materialSpecs[2].nameEn));
 console.log('✓ 成功的空结果也会复用，重试不重复搜索已完成的缺货材料');
 
-const wrongOnly = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, band: 0.001,
+const wrongOnly = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, exteriors: ['ft'],
   steam: mockSteam(0.2, { wrongOnly: true }) });
 assert.equal(wrongOnly.poolSize, 0);
 assert.equal(wrongOnly.error, 'not_enough_recipe_materials');
@@ -218,7 +218,7 @@ for (const target of [0.2, 0.7]) {
       ] };
     },
   };
-  const result = await hunter.hunt({ recipePlan: plan, targetWear: target, band: 0.001 }, { timeBudgetMs: 1000 });
+  const result = await hunter.hunt({ recipePlan: plan, targetWear: target, exteriors: [target === 0.2 ? 'ft' : 'bs'] }, { timeBudgetMs: 1000 });
   verifyResult(result, target);
   assert.deepEqual(searches, plan.materialSpecs.map(m => m.name));
   assert.equal(orders.length, 3);
@@ -443,7 +443,7 @@ const ready = new Promise((resolve, reject) => {
 });
 try {
   await ready;
-  const res = await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&band=0.002&market=steam`);
+  const res = await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&exteriors=ft,mw&market=steam`);
   const stream = await res.text();
   assert.ok(!stream.includes('event: error'), stream);
   const event = name => {
@@ -460,14 +460,14 @@ try {
   assert.equal(result.materialBands.length, 0);
   assert.deepEqual(result.collectionSpecs.map(m => m.count), [9, 1]);
   console.log('✓ 真实 Web SSE 端点传递收藏品比例与同等级候选，并使用替代枪皮产出正确结果');
-  const wideStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&band=0.5&market=steam`)).text();
+  const wideStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&exteriors=fn,mw,ft,ww,bs&market=steam`)).text();
   assert.ok(!wideStream.includes('event: error'), wideStream);
-  assert.match(wideStream, /组合搜索半径 0.5/);
+  assert.match(wideStream, /搜索已勾选档位的完整区间/);
   const wideResult = JSON.parse(wideStream.match(/event: result\ndata: ([^\n]+)/)[1]);
   assert.ok(wideResult.collectionBands.every(m => m.band[0] === f32(m.range[0]) && m.band[1] > (m.range[0] + m.range[1]) / 2));
-  const invalidRadius = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&band=2&market=steam`)).text();
-  assert.match(invalidRadius, /invalid_search_radius/);
-  console.log('✓ 真实 Web SSE 半径 0.5 未截断，保留宽范围；无效半径明确报错');
+  const invalidRadius = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&exteriors=unknown&market=steam`)).text();
+  assert.match(invalidRadius, /invalid_exteriors/);
+  console.log('✓ 真实 Web SSE 多选档位覆盖完整区间；无效档位明确报错');
   for (const [sid, choice, expected] of [
     ['1111111111111111', '', true], ['1111111111111111', '&stattrak=0', false],
     ['099784dbf1e1240d', '&stattrak=1', true],
@@ -475,7 +475,7 @@ try {
     const metadata = await (await fetch(`http://127.0.0.1:${port}/api/recipe?url=${sid}`)).json();
     assert.equal(metadata.ok, true);
     assert.equal(metadata.statTrak, sid === '1111111111111111');
-    const stream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=${sid}&wear=0.2&band=0.002&market=steam${choice}`)).text();
+    const stream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=${sid}&wear=0.2&exteriors=ft,mw&market=steam${choice}`)).text();
     assert.ok(!stream.includes('event: error'), stream);
     const result = JSON.parse(stream.match(/event: result\ndata: ([^\n]+)/)[1]);
     assert.equal(result.statTrak, expected);
@@ -483,7 +483,7 @@ try {
     assert.ok(result.recipes.every(r => r.materials.every(m => m.marketHashName.startsWith('StatTrak™ ') === expected)));
   }
   console.log('✓ 真实 API 默认跟随暗金链接，明确 stattrak=0 可关闭暗金，普通链接 stattrak=1 可开启');
-  const bothStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&band=0.002&market=both`)).text();
+  const bothStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&exteriors=ft,mw&market=both`)).text();
   assert.ok(!bothStream.includes('event: error'), bothStream);
   const bothResult = JSON.parse(bothStream.match(/event: result\ndata: ([^\n]+)/)[1]);
   assert.equal(bothResult.dataSource, 'both');
@@ -491,7 +491,7 @@ try {
   verifyCollectionResult({ ...bothResult, ok: true }, collectionPlan, 0.2);
   assert.ok(bothResult.recipes[0].materials.every(m => m.marketOffers.buff && m.marketOffers.steam && m.cheaperMarket === 'buff'));
   console.log('✓ 真实双市场 SSE 搜索两边真实挂单，输出逐笔磨损、价格、链接和便宜市场');
-  const retryUrl = `http://127.0.0.1:${port}/api/hunt?url=2222222222222222&wear=0.2&band=0.002&market=steam`;
+  const retryUrl = `http://127.0.0.1:${port}/api/hunt?url=2222222222222222&wear=0.2&exteriors=ft,mw&market=steam`;
   const timedOutStream = await (await fetch(retryUrl + '&task_id=timeout-integration')).text();
   const timeoutError = JSON.parse(timedOutStream.match(/event: error\ndata: ([^\n]+)/)[1]);
   assert.match(timeoutError.message, /搜索超时/);

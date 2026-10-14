@@ -1,0 +1,218 @@
+{
+  "created_at": 1791961573533,
+  "title": "变革武器箱 X 千瓦武器箱 X 反冲武器箱",
+  "subtitle": "普通",
+  "recipe_line": "1打1打8｜受限级→保密级",
+  "matchup": "1打1打8",
+  "input_rarity_label": "受限级",
+  "output_rarity_label": "保密级",
+  "stattrak": false,
+  "metrics": {
+    "cost": 19.959999999999997,
+    "expected": 21.912666666666667,
+    "roi": 0.09782899131596541,
+    "break_even_rate": 0.8333333333333334,
+    "eco_break_even_rate": 0.3,
+    "max_output": 26.65,
+    "max_profit": 6.690000000000001
+  },
+  "materials": [
+    {
+      "key": "input-0-0",
+      "name": "R8 Revolver | Banana Cannon (Well-Worn)",
+      "cn": "R8 左轮手枪 | 蕉农炮 (破损不堪)",
+      "collection": "The Revolution Collection",
+      "unit_price": 1.83,
+      "wear": 0.398,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLjm4Dv8TRe_c2pe5t_eM-RD2mRz-9JveRtRjy-2xwlsWmGmdmhJ3uROAJxA8dzQ-Ff5kGwx9XlNrm2tg3ZgoNFny2q3XtXrnE8X2QHmf8%2F160fx160f"
+    },
+    {
+      "key": "input-1-0",
+      "name": "Five-SeveN | Hybrid (Well-Worn)",
+      "cn": "FN57 | 混合体 (破损不堪)",
+      "collection": "The Kilowatt Collection",
+      "unit_price": 1.88,
+      "wear": 0.398,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL3l4Dl7idN6vyRbq17JeOWGGKe_uZvsvNgSxa-kBkupjDLmYyuJ3-WbFdxCcd2R7YOtBjtw9LiPuzi7lTYjoMXnyitiSsa6ittsPFCD_RRYLwcSw%2F160fx160f"
+    },
+    {
+      "key": "input-2-0",
+      "name": "M249 | Downtown (Field-Tested)",
+      "cn": "M249 | 闹市区 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "unit_price": 2,
+      "wear": 0.264,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8zMK5wiFO0P_8PP1SJP-EAHGf1etJveRtRjy-200m5TyBzIz9eXPFOwchCJd3TOEN5BS_lNa0Yuqx4VGP2tkQnH743ytXrnE8rcFDdTQ%2F160fx160f"
+    },
+    {
+      "key": "input-2-1",
+      "name": "M249 | Downtown (Field-Tested)",
+      "cn": "M249 | 闹市区 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "unit_price": 2,
+      "wear": 0.264,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8zMK5wiFO0P_8PP1SJP-EAHGf1etJveRtRjy-200m5TyBzIz9eXPFOwchCJd3TOEN5BS_lNa0Yuqx4VGP2tkQnH743ytXrnE8rcFDdTQ%2F160fx160f"
+    },
+    {
+      "key": "input-2-2",
+      "name": "M249 | Downtown (Field-Tested)",
+      "cn": "M249 | 闹市区 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "unit_price": 2,
+      "wear": 0.264,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8zMK5wiFO0P_8PP1SJP-EAHGf1etJveRtRjy-200m5TyBzIz9eXPFOwchCJd3TOEN5BS_lNa0Yuqx4VGP2tkQnH743ytXrnE8rcFDdTQ%2F160fx160f"
+    },
+    {
+      "key": "input-3-0",
+      "name": "SG 553 | Dragon Tech (Field-Tested)",
+      "cn": "SG 553 | 青龙 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "unit_price": 2.05,
+      "wear": 0.23399999999999999,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLimcO1qx1Y-s29b_E4c8-QF2WV09FyouBuQCeMmBgjuiiI1Iqrc3mWZwByDsR3R-cPs0O8wdTlNO3ktgPXjINCnH2qjy0f7CxpsLkcEf1ykuhfzLs%2F160fx160f"
+    },
+    {
+      "key": "input-3-1",
+      "name": "SG 553 | Dragon Tech (Field-Tested)",
+      "cn": "SG 553 | 青龙 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "unit_price": 2.05,
+      "wear": 0.23399999999999999,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLimcO1qx1Y-s29b_E4c8-QF2WV09FyouBuQCeMmBgjuiiI1Iqrc3mWZwByDsR3R-cPs0O8wdTlNO3ktgPXjINCnH2qjy0f7CxpsLkcEf1ykuhfzLs%2F160fx160f"
+    },
+    {
+      "key": "input-3-2",
+      "name": "SG 553 | Dragon Tech (Field-Tested)",
+      "cn": "SG 553 | 青龙 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "unit_price": 2.05,
+      "wear": 0.23399999999999999,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLimcO1qx1Y-s29b_E4c8-QF2WV09FyouBuQCeMmBgjuiiI1Iqrc3mWZwByDsR3R-cPs0O8wdTlNO3ktgPXjINCnH2qjy0f7CxpsLkcEf1ykuhfzLs%2F160fx160f"
+    },
+    {
+      "key": "input-3-3",
+      "name": "SG 553 | Dragon Tech (Field-Tested)",
+      "cn": "SG 553 | 青龙 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "unit_price": 2.05,
+      "wear": 0.23399999999999999,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLimcO1qx1Y-s29b_E4c8-QF2WV09FyouBuQCeMmBgjuiiI1Iqrc3mWZwByDsR3R-cPs0O8wdTlNO3ktgPXjINCnH2qjy0f7CxpsLkcEf1ykuhfzLs%2F160fx160f"
+    },
+    {
+      "key": "input-3-4",
+      "name": "SG 553 | Dragon Tech (Field-Tested)",
+      "cn": "SG 553 | 青龙 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "unit_price": 2.05,
+      "wear": 0.23399999999999999,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLimcO1qx1Y-s29b_E4c8-QF2WV09FyouBuQCeMmBgjuiiI1Iqrc3mWZwByDsR3R-cPs0O8wdTlNO3ktgPXjINCnH2qjy0f7CxpsLkcEf1ykuhfzLs%2F160fx160f"
+    }
+  ],
+  "outputs": [
+    {
+      "key": "output-2",
+      "name": "AK-47 | Ice Coaled (Field-Tested)",
+      "cn": "AK-47 | 可燃冰 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "probability": 0.26666666666666666,
+      "expected_wear": 0.28381353846153845,
+      "price": 26.65,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSI_-UGm-Zz-llj-xsSyCmmFMi5GrcwtivdnnCOgd2DsNxTeIJuxbqk9XuN-_i5gKI3d1BxH35iy1P8G81tKMOXOY4%2F160fx160f"
+    },
+    {
+      "key": "output-8",
+      "name": "M4A1-S | Black Lotus (Field-Tested)",
+      "cn": "M4A1消音版 | 黑莲花 (久经沙场)",
+      "collection": "The Kilowatt Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.25801230769230765,
+      "price": 22.85,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_3HDzaD_ux6seJicCW8gQg0jDCAnobsLGWTbQQnDsN3QuYOtELqkIazZeLm7lPYj9gQzyj72y8du31i6ulQA6Rx5OSJ2CPXrFUp%2F160fx160f"
+    },
+    {
+      "key": "output-0",
+      "name": "P250 | Visions (Field-Tested)",
+      "cn": "P250 | 迷人幻象 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "probability": 0.26666666666666666,
+      "expected_wear": 0.25801230769230765,
+      "price": 20.75,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhzMOwwiVI0OL8PfRSNvmAB2ie0tF7teVgWiT9wkR2tzncnoqueSnCbwZ0CZBzRbUOtUTrlIXiZr6z4wbYid8Rzyr72zQJsHhI3xLykQ%2F160fx160f"
+    },
+    {
+      "key": "output-1",
+      "name": "Sawed-Off | Kiss♥Love (Field-Tested)",
+      "cn": "截短霰弹枪 | 么么 (久经沙场)",
+      "collection": "The Recoil Collection",
+      "probability": 0.26666666666666666,
+      "expected_wear": 0.368589010989011,
+      "price": 20.49,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLin4Hl-S1d6c2tfZt-IeeWCmiWx9F9ufJ6QyalkCIqtjmMj4K3IHOfbVQlDsZ0Fu8Pt0S8xNGzMunn4QTagoNGyC_5iHhL7nput70GWb1lpPNuwc0NDw%2F160fx160f"
+    },
+    {
+      "key": "output-7",
+      "name": "USP-S | Jawbreaker (Field-Tested)",
+      "cn": "USP消音版 | 破颚者 (久经沙场)",
+      "collection": "The Kilowatt Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.368589010989011,
+      "price": 19.55,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkjYbf7itX6vytbbZSNeODHViUzulxqd5kSi26gBBp42mDz939J32VZwFyA8FxReBesRO8wdK0ZrzitQ2K2oMTzCWviCMb5jErvbgcxKeE5g%2F160fx160f"
+    },
+    {
+      "key": "output-3",
+      "name": "P2000 | Wicked Sick (Field-Tested)",
+      "cn": "P2000 | 变态杀戮 (久经沙场)",
+      "collection": "The Revolution Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.368589010989011,
+      "price": 18.67,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL5lYayrXIL0PG7V7Q_cKDDMWOVwuJ_vuRWQiy3nAgq_WmHn96ucnyTPwAmApIlQOBYtBftwYDnMr-x5VOIg9lDn37-3CJBvHt1o7FVCvQdJQc%2F160fx160f"
+    },
+    {
+      "key": "output-4",
+      "name": "UMP-45 | Wild Child (Field-Tested)",
+      "cn": "UMP-45 | 野孩子 (久经沙场)",
+      "collection": "The Revolution Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.368589010989011,
+      "price": 17.99,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkk4a0qB1Y-s27ZbRSI_yGGmSY_uV_s-pWQiy3nAgq_T6AyNasJ3iePQByW5NwTeEKsxbqw9LhYePitlbZ34wWxXqsjyhPvy11o7FVOjdBjQA%2F160fx160f"
+    },
+    {
+      "key": "output-6",
+      "name": "Zeus x27 | Olympus (Field-Tested)",
+      "cn": "宙斯x27电击枪 | 奥林匹斯 (久经沙场)",
+      "collection": "The Kilowatt Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.24695463736263737,
+      "price": 17.88,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLln4Xl7x1B6ue9V7BlNf6XC3WvxuFyj-xsSyCmmFMk52SBw9qhJH6QOlAhWcEjQ-8I5BOwxNDlN-LntAyMg91DziWth3tI8G81tJsBsl6E%2F160fx160f"
+    },
+    {
+      "key": "output-5",
+      "name": "AWP | Duality (Field-Tested)",
+      "cn": "AWP | 金粉肆蛇 (久经沙场)",
+      "collection": "The Revolution Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.2948712087912088,
+      "price": 17.32,
+      "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf-jFk7uW-V6hkLfKcMXSewOVzj-xsSyCmmFN0tzvcnor9IC7CP1BxDpVyEO9Zt0Swx4bvP-7ktQfZj4kTn3n2hi8b8G81tHGU9aNy%2F160fx160f"
+    }
+  ],
+  "collections": [
+    "The Revolution Collection",
+    "The Kilowatt Collection",
+    "The Recoil Collection"
+  ],
+  "hero_output": {
+    "key": "output-2",
+    "name": "AK-47 | Ice Coaled (Field-Tested)",
+    "cn": "AK-47 | 可燃冰 (久经沙场)",
+    "collection": "The Recoil Collection",
+    "probability": 0.26666666666666666,
+    "expected_wear": 0.28381353846153845,
+    "price": 26.65,
+    "image": "/api/image-proxy?url=https%3A%2F%2Fcommunity.akamai.steamstatic.com%2Feconomy%2Fimage%2Fi0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSI_-UGm-Zz-llj-xsSyCmmFMi5GrcwtivdnnCOgd2DsNxTeIJuxbqk9XuN-_i5gKI3d1BxH35iy1P8G81tKMOXOY4%2F160fx160f"
+  }
+}

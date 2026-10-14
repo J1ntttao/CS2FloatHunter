@@ -13,7 +13,7 @@
     "hunt": "node src/cli.mjs",
     "web": "node --watch src/web/server.mjs",
     "start": "node --watch src/web/server.mjs",
-    "test": "node tests/test-float.mjs && node tests/test-inspect.mjs && node tests/test-vs-site.mjs && node tests/test-hunt-steam.mjs && node tests/test-recipe-hunt.mjs && node tests/test-combination-search.mjs && node tests/test-dual-market.mjs && node tests/test-market-access.mjs && node tests/test-collection-location.mjs && node tests/test-search-tasks.mjs && node tests/test-login-validation.mjs"
+    "test": "node tests/test-float.mjs && node tests/test-inspect.mjs && node tests/test-vs-site.mjs && node tests/test-hunt-steam.mjs && node tests/test-recipe-hunt.mjs && node tests/test-combination-search.mjs && node tests/test-incremental-search.mjs && node tests/test-exterior-search.mjs && node tests/test-search-options.mjs && node tests/test-dual-market.mjs && node tests/test-market-access.mjs && node tests/test-collection-location.mjs && node tests/test-search-tasks.mjs && node tests/test-login-validation.mjs"
   },
   "dependencies": {}
 }

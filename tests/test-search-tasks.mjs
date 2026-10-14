@@ -19,13 +19,15 @@ const ok = (condition, message) => {
 const html = fs.readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
 const stopCode = html.slice(html.indexOf("let MARKET = 'buff';"), html.indexOf("$('stop').onclick = stopSearch;"));
 const goCode = html.slice(html.indexOf("$('go').onclick ="), html.indexOf('function openBuyPanel'));
-const elements = Object.fromEntries(['link', 'wear', 'go', 'stop', 'continue', 'band', 'interval', 'insecure', 'proxy', 'stattrak', 'qualityNote']
+const elements = Object.fromEntries(['link', 'wear', 'go', 'stop', 'continue', 'eta', 'exterior_fn', 'exterior_mw', 'exterior_ft', 'exterior_ww', 'exterior_bs', 'randomPages', 'next', 'interval', 'insecure', 'proxy', 'stattrak', 'qualityNote']
   .map(id => [id, { style: {}, value: '', checked: true }]));
 elements.link.value = '7928752d714f8e31';
 elements.wear.value = '0.2';
+elements.randomPages.value = '20';
 const sources = [];
 const statuses = [];
 let acknowledgeCancel;
+let uiNow = Date.now(), etaTick;
 class FakeEventSource {
   static CLOSED = 2;
   handlers = {};
@@ -34,6 +36,8 @@ class FakeEventSource {
   addEventListener(type, handler) { this.handlers[type] = handler; }
 }
 const page = vm.createContext({
+  Date: class extends Date { static now() { return uiNow; } },
+  setInterval: callback => { etaTick = callback; return 1; }, clearInterval: () => { etaTick = null; },
   $: id => elements[id], crypto: { randomUUID: () => `task-${sources.length}` },
   URLSearchParams, EventSource: FakeEventSource, MARKET_LABEL: { buff: 'BUFF' },
   statusLine: text => statuses.push(text), reset: () => {}, renderLocated: () => {}, renderResult: () => {},
@@ -42,6 +46,17 @@ const page = vm.createContext({
 });
 vm.runInContext(stopCode + goCode, page);
 elements.go.onclick();
+sources[0].handlers.material({ data: JSON.stringify({ type: 'materialStart', id: 'mat-current' }) });
+ok(!elements.next.disabled, '当前武器开始抓取时开放下一把按钮');
+const cancelFetch = page.fetch;
+let nextRequest;
+page.fetch = async (url, options) => { nextRequest = [url, JSON.parse(options.body)]; return { json: async () => ({ skipped: true }) }; };
+await vm.runInContext('nextWeapon()', page);
+ok(nextRequest[0] === '/api/next' && nextRequest[1].materialId === 'mat-current' && elements.next.disabled,
+  '实际页面下一把请求携带当前武器与任务 ID，已接受请求不重复提交');
+sources[0].handlers.material({ data: JSON.stringify({ type: 'materialStart', id: 'mat-next' }) });
+ok(!elements.next.disabled, '下一把开始后按钮重新开放');
+page.fetch = cancelFetch;
 const stopping = vm.runInContext('stopSearch()', page);
 ok(elements.go.disabled && sources[0].readyState === FakeEventSource.CLOSED,
   '停止时立即关闭 SSE，并在服务端确认取消前禁止重搜');
@@ -49,6 +64,18 @@ acknowledgeCancel({ ok: true });
 await stopping;
 ok(!elements.go.disabled, '服务端确认取消后恢复搜索按钮');
 elements.go.onclick();
+sources[1].handlers.stage({ data: JSON.stringify({ message: '搜索中', etaMs: 6500 }) });
+ok(elements.eta.textContent === '预计剩余时间：约 0:07', '搜索阶段事件启动预计剩余时间倒计时');
+sources[1].handlers.progress({ data: JSON.stringify({ message: '已校正', etaMs: 12500 }) });
+ok(elements.eta.textContent === '预计剩余时间：约 0:13', '后续进度事件可以校正预计剩余时间');
+uiNow += 20000;
+etaTick();
+ok(elements.eta.textContent.includes('重新估算') && !elements.eta.textContent.includes('即将完成'),
+  '前端估算过期后显示重新估算，避免即将完成停留十几分钟');
+sources[1].handlers.eta({ data: JSON.stringify({ etaMs: null, etaState: 'reestimating', elapsedMs: 900000, total: 25, completed: 2, pages: 8 }) });
+ok(elements.eta.textContent.includes('已用 15:00') && elements.eta.textContent.includes('档位 2/25') && elements.eta.textContent.includes('已抓 8 页'),
+  '心跳更新时间、实际页数和档位进度，未知剩余时间不会显示虚假倒计时');
+ok(new URLSearchParams(sources[1].url.split('?')[1]).get('exteriors') === 'fn,mw,ft,ww,bs', '实际页面搜索传递所勾选档位');
 const statusCount = statuses.length;
 sources[0].handlers.error({ data: '{"message":"old error"}' });
 ok(elements.go.disabled && statuses.length === statusCount, '旧搜索的迟到错误不影响新搜索按钮和状态');
@@ -62,6 +89,7 @@ ok(new URLSearchParams(initialRetryable.url.split('?')[1]).get('stattrak') === '
 initialRetryable.handlers.error({ data: JSON.stringify({
   message: '搜索超时', resume: { id: 'resume-ui', canContinue: true, pending: [{ id: 'x' }] },
 }) });
+ok(elements.eta.textContent === '预计剩余时间：—', '搜索错误结束后清理预计剩余时间');
 ok(elements.continue.style.display === '', '搜索错误结束后显示重试失败项按钮');
 elements.continue.onclick();
 const retried = sources[3];
@@ -100,6 +128,10 @@ ok(tasks.active === second, '旧任务的 finally 不会清掉新任务锁');
 ok(tasks.cancel('second') && !tasks.busy, '按任务 ID 取消当前任务');
 
 const third = tasks.start(response(), 'third');
+third.currentMaterialId = 'mat-1';
+ok(third.skip('mat-1'), '下一把武器只接受当前材料的跳过请求');
+ok(!third.skip('mat-1') && third.consumeSkip(), '重复跳过请求只消费一次');
+ok(!third.skip('mat-old'), '旧材料不能跳过当前搜索');
 let finishOld;
 const pending = third.run(() => new Promise(resolve => { finishOld = resolve; }));
 await Promise.resolve();
@@ -249,7 +281,9 @@ const openSearch = async id => {
 };
 try {
   await ready;
-  ok((await openSearch('old')).includes('event: stage'), '真实端点开始搜索');
+  const firstEvent = await openSearch('old');
+  ok(firstEvent.includes('event: stage'), '真实端点开始搜索');
+  ok(firstEvent.includes('"etaMs"'), '真实 SSE 阶段事件包含预计剩余时间');
   const cancel = await fetch(`${base}/api/cancel`, { method: 'POST',
     headers: { 'content-type': 'application/json' }, body: JSON.stringify({ taskId: 'old' }) });
   ok((await cancel.json()).cancelled, '停止端点取消旧任务');

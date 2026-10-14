@@ -26,6 +26,8 @@ import { verifySteamSession, verifyCsfloatToken, saveCsfloatCreds } from '../aut
 import { prepareLoginInputs, verifyBuffSession } from '../auth/login-input.mjs';
 import { marketAccess, normalizeMarket } from '../market/access.mjs';
 import { SearchTasks } from './search-tasks.mjs';
+import { SearchEta } from './search-eta.mjs';
+import { normalizeExteriors } from '../market/exteriors.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -34,6 +36,8 @@ const HOST = '127.0.0.1';
 
 const tasks = new SearchTasks();
 const huntCheckpoints = new Map();
+const HUNT_TIMEOUT_MS = 15 * 60 * 1000;
+const HUNT_SOLVER_BUDGET_MS = 40 * 1000;
 
 /** 读取 POST 的 JSON body（带上限） */
 function readJsonBody(req, limit = 512 * 1024) {
@@ -181,7 +185,7 @@ async function handleResolve(req, res, url) {
 }
 
 /**
- * 端点：/api/hunt?url=<配方链接>&wear=<想要的产物磨损>&band=&interval=&market=buff|steam|both
+ * 端点：/api/hunt?url=<配方链接>&wear=<想要的产物磨损>&exteriors=fn,mw,ft,ww,bs&interval=&market=buff|steam|both
  *
  * 与 /api/resolve 的区别：
  *   resolve = 照抄配方里每把材料的目标磨损，去找最接近的真实挂单
@@ -196,7 +200,8 @@ async function handleHunt(req, res, url) {
   const link = url.searchParams.get('url') || '';
   const wearRaw = url.searchParams.get('wear');
   const targetWear = Number(wearRaw);
-  const band = Number(url.searchParams.get('band') || 0.03);
+  const exteriors = normalizeExteriors(url.searchParams.has('exteriors') ? url.searchParams.get('exteriors') : undefined);
+  const randomPages = Number(url.searchParams.get('random_pages') ?? 20);
   const intervalMs = Math.max(1200, Math.min(8000, Number(url.searchParams.get('interval') || 2200)));
   const qualityParam = url.searchParams.get('stattrak');
   const market = normalizeMarket(url.searchParams.get('market'));
@@ -207,12 +212,13 @@ async function handleHunt(req, res, url) {
   const proxy = proxyParam ? parseProxyUrl(proxyParam) : undefined;
   const resumeId = url.searchParams.get('resume_id') || '';
   const checkpointSignature = JSON.stringify({
-    link, wear: wearRaw, band, intervalMs, market, quality: qualityParam || null,
+    link, wear: wearRaw, exteriors, intervalMs, randomPages, market, quality: qualityParam || null,
   });
 
   sseHead(res);
   const t0 = Date.now();
-  const send = (event, data) => sse(res, event, { ...data, t: Date.now() - t0 });
+  const eta = new SearchEta({ solverMs: HUNT_SOLVER_BUDGET_MS });
+  const send = (event, data) => sse(res, event, { ...data, ...eta.snapshot(), t: Date.now() - t0 });
   const sendResume = info => { if (info?.id) send('resume', info); };
 
   let checkpoint;
@@ -238,6 +244,13 @@ async function handleHunt(req, res, url) {
   const task = tasks.start(res, url.searchParams.get('task_id'));
   if (!task) return;
   const progress = m => { task.check(); send('progress', { message: m }); };
+  const onWork = event => {
+    task.check(); eta.update(event);
+    if (event.type === 'materialStart') { task.currentMaterialId = event.id; task.skipRequested = false; }
+    if (event.type === 'materialEnd' || event.type === 'solver') { task.currentMaterialId = null; task.skipRequested = false; }
+    send(event.type === 'materialStart' || event.type === 'materialEnd' ? 'material' : 'eta', event);
+  };
+  const heartbeat = setInterval(() => send('eta', {}), 2000);
 
   try {
     await task.run(async () => {
@@ -246,10 +259,13 @@ async function handleHunt(req, res, url) {
         discardCheckpoint();
         return;
       }
-      if (!Number.isFinite(band) || band < 0 || band > 1) {
-        send('error', { message: '组合磨损搜索半径必须在 0 到 1 之间。', code: 'invalid_search_radius' });
-        discardCheckpoint();
-        return;
+      if (!exteriors) {
+        send('error', { message: '请至少勾选一个有效的磨损品质等级。', code: 'invalid_exteriors' });
+        discardCheckpoint(); return;
+      }
+      if (!Number.isInteger(randomPages) || randomPages < 0 || randomPages > 500) {
+        send('error', { message: '随机页数须为 0–500 的整数。', code: 'invalid_search_options' });
+        discardCheckpoint(); return;
       }
       send('stage', { stage: 'recipe', message: checkpoint.recipe ? '复用已读取的 CS2UP 配方，继续未完成搜索 ...' : '正在读取 CS2UP 配方中的材料种类与数量 ...' });
       sendResume({ id: checkpoint.id, canContinue: true, pending: [] });
@@ -310,8 +326,8 @@ async function handleHunt(req, res, url) {
         r = await hunter.huntFromSteam({
           recipePlan: loc, resumeState: checkpoint,
           collectionName: loc.collection, materialGrade: loc.grade,
-          targetWear, statTrak, band, count: loc.totalCount, steam,
-        }, { onProgress: progress, timeBudgetMs: 40000, wants: 5 });
+          targetWear, statTrak, exteriors, steamRandomPages: randomPages, count: loc.totalCount, steam,
+        }, { onProgress: progress, onWork, shouldSkip: () => task.consumeSkip(), timeBudgetMs: HUNT_SOLVER_BUDGET_MS, wants: 5 });
       } else {
         const access = marketAccess(market, { hasBuff: hasCookies('buff') });
         if (!access.ok) {
@@ -323,8 +339,8 @@ async function handleHunt(req, res, url) {
           steam: market === 'both' ? new SteamMarket({ minIntervalMs: 2500, allowInsecure, proxy, verbose: false, signal: task.signal }) : undefined,
           recipePlan: loc, resumeState: checkpoint,
           collectionName: loc.collection, materialGrade: loc.grade,
-          targetWear, statTrak, band, count: loc.totalCount,
-        }, { onProgress: progress, timeBudgetMs: 40000, wants: 5 });
+          targetWear, statTrak, exteriors, steamRandomPages: randomPages, count: loc.totalCount,
+        }, { onProgress: progress, onWork, shouldSkip: () => task.consumeSkip(), timeBudgetMs: HUNT_SOLVER_BUDGET_MS, wants: 5 });
       }
       task.check();
 
@@ -359,7 +375,8 @@ async function handleHunt(req, res, url) {
         outRange: r.outRange,
         usableRanges: r.usableRanges,
         skippedRanges: r.skippedRanges,
-        band: r.band,
+        exteriors: r.exteriors,
+        randomPages: r.randomPages,
         poolSize: r.poolSize,
         marketCounts: r.marketCounts,
         statTrak: r.statTrak,
@@ -378,9 +395,10 @@ async function handleHunt(req, res, url) {
         resume: r.resume || { id: checkpoint.id, canContinue: false, pending: [] },
       });
       sendResume(r.resume);
+      eta.update({ type: 'done' });
       send('done', { elapsedMs: Date.now() - t0 });
       if (!r.resume?.canContinue) huntCheckpoints.delete(checkpoint.id);
-    }, 15 * 60 * 1000);
+    }, HUNT_TIMEOUT_MS);
   } catch (e) {
     const pending = Array.isArray(checkpoint.pendingMaterials)
       ? checkpoint.pendingMaterials.filter(item => !checkpoint.items[item.id]?.complete)
@@ -392,8 +410,10 @@ async function handleHunt(req, res, url) {
     const message = e?.name === 'TimeoutError'
       ? '搜索超时，已保留成功材料。请点击“重试失败项（继续）”，只补抓失败或尚未完成的材料。'
       : e?.message || String(e);
+    eta.update({ type: 'done' });
     send('error', { message, resume });
   } finally {
+    clearInterval(heartbeat);
     task.finish();
   }
 }
@@ -474,6 +494,18 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       if (!body.taskId || typeof body.taskId !== 'string') return json(res, 400, { ok: false, error: '缺少任务 ID' });
       return json(res, 200, { ok: true, cancelled: tasks.cancel(body.taskId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, error: e.message });
+    }
+  }
+
+  if (url.pathname === '/api/next' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      if (!body.taskId || typeof body.taskId !== 'string') return json(res, 400, { ok: false, error: '缺少任务 ID' });
+      const task = tasks.active;
+      const skipped = !!task && task.id === body.taskId && task.skip(body.materialId);
+      return json(res, 200, { ok: true, skipped });
     } catch (e) {
       return json(res, 400, { ok: false, error: e.message });
     }

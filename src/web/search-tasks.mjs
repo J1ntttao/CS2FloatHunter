@@ -9,6 +9,13 @@ export class SearchTasks {
     const controller = new AbortController();
     const task = {
       id: id || `${Date.now()}-${Math.random().toString(36).slice(2)}`, signal: controller.signal,
+      skipRequested: false,
+      currentMaterialId: null,
+      skip: materialId => {
+        if (!task.currentMaterialId || materialId !== task.currentMaterialId || task.skipRequested) return false;
+        task.skipRequested = true; return true;
+      },
+      consumeSkip: () => { const requested = task.skipRequested; task.skipRequested = false; return requested; },
       check: () => controller.signal.throwIfAborted(),
       finish: () => {
         res.off('close', disconnect);

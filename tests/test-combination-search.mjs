@@ -67,7 +67,7 @@ function steamClient({ poorOnly = false } = {}) {
 const hunter = new CollectionHunter({ intervalMs: 0 });
 hunter.buff = { listGoods() { throw new Error('仅 Steam 不得查询 BUFF'); } };
 const steam = steamClient();
-const result = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.20001016, band: 0.5, steam },
+const result = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.20001016, exteriors: ['fn', 'mw', 'ft', 'ww', 'bs'], steam },
   { timeBudgetMs: 1500, wants: 3 });
 assert.equal(result.ok, true, result.message);
 assert.equal(result.bestScore, targetInfo.minimumScore);
@@ -83,12 +83,14 @@ for (const r of result.recipes) {
 }
 console.log(`✓ 用户分享配方仅 Steam / 半径 0.5：低高磨损互补，固定 6 / 1 / 3，产物 ${result.recipes[0].outputWear} 达到理论最小误差`);
 
-const poor = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.20001016, band: 0.5, steam: steamClient({ poorOnly: true }) });
-assert.equal(poor.error, 'target_not_reachable');
+const poor = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.20001016, exteriors: ['fn', 'mw', 'ft', 'ww', 'bs'], steam: steamClient({ poorOnly: true }) }, { timeBudgetMs: 500 });
+assert.equal(poor.ok, true, poor.message);
 assert.ok(poor.reachableRange[0] > target);
-assert.equal(poor.recipes, undefined);
-assert.match(poor.message, /不会将偏离目标的组合作为推荐配方/);
-console.log('✓ 当前候选只能产出 0.28724 时明确报目标不可达，不返回推荐配方');
+assert.equal(poor.exactFound, false);
+assert.equal(poor.recipes[0].approximate, true);
+assert.equal(poor.recipes[0].materials.length, 10);
+assert.equal(poor.recipes[0].score, Math.abs(poor.recipes[0].outputWear - target));
+console.log('✓ 当前候选只能产出 0.28724 时返回十件近似组合及真实误差，保留收藏品配额');
 
 const members = [0, 0.1, 0.3, 0.95, 0.05, 0.4, 0.8].map((norm, i) => ({ norm: f32(norm), recipeGroupId: i < 4 ? 'A' : 'B' }));
 const filtered = feasibleCandidates(members, { A: 2, B: 1 }, 0.45, [0, 1], 3);
@@ -169,50 +171,48 @@ const adaptiveSteam = {
     if (!m) return { ok: true, listings: [] };
     const gi = secondPlan.materialSpecs.indexOf(m);
     const initial = Array.from({ length: m.count }, (_, i) => gi === 2 && i === 2 ? lastWear : f32(0.28));
-    const wears = options.sortBy === 'wear.asc' && gi === 0 && options.pages >= 16
-      ? Array(4).fill(f32(0.08)) : initial;
+    const wears = gi === 0 && name.endsWith('(Minimal Wear)') ? Array(4).fill(f32(0.08)) : initial;
     return { ok: true, listings: wears.map((wear, i) => ({
       listingId: `${m.id}:${wear}:${i}`, assetId: `${m.id}:${wear}:${i}`, floatvalue: wear,
       marketHashName: `${m.nameEn} (${exterior(wear)})`, currencyId: 23, price: 1,
-    })).filter(l => l.marketHashName === name && l.floatvalue >= options.minPaintwear && l.floatvalue <= options.maxPaintwear) };
+    })).filter(l => l.marketHashName === name && l.floatvalue >= (options.minPaintwear ?? 0) && l.floatvalue <= (options.maxPaintwear ?? 1)) };
   },
 };
 const progress = [];
-const adaptive = await hunter.huntFromSteam({ recipePlan: secondPlan, targetWear: target, band: 0.1,
+const adaptive = await hunter.huntFromSteam({ recipePlan: secondPlan, targetWear: target, exteriors: ['fn', 'mw', 'ft', 'ww', 'bs'],
   steam: adaptiveSteam, resumeState: state }, { timeBudgetMs: 500, onProgress: m => progress.push(m) });
 assert.equal(adaptive.ok, true, adaptive.message);
 assert.equal(adaptive.bestScore, targetInfo.minimumScore);
 assert.deepEqual(secondPlan.collectionSpecs.map(g => adaptive.recipes[0].materials.filter(m => m.recipeGroupId === g.id).length), [4, 3, 3]);
-assert.ok(calls.filter(c => !c.sortBy).every(c => c.maxPaintwear <= 0.301));
-assert.ok(calls.some(c => c.sortBy === 'wear.asc' && c.pages === 8));
-assert.ok(calls.some(c => c.sortBy === 'wear.asc' && c.pages === 16));
-assert.ok(progress.some(m => m.includes('定向补抓低磨损')));
+assert.ok(calls.some(c => c.name.endsWith('(Minimal Wear)') && c.minPaintwear === f32(0.07) && c.maxPaintwear < f32(0.15)));
+assert.ok(progress.some(m => m.includes('逐档搜索')));
 const resumeCalls = calls.length;
-const resumed = await hunter.huntFromSteam({ recipePlan: secondPlan, targetWear: target, band: 0.1,
+const resumed = await hunter.huntFromSteam({ recipePlan: secondPlan, targetWear: target, exteriors: ['fn', 'mw', 'ft', 'ww', 'bs'],
   steam: adaptiveSteam, resumeState: state }, { timeBudgetMs: 500 });
 assert.equal(resumed.ok, true, resumed.message);
 assert.equal(resumed.bestScore, targetInfo.minimumScore);
 assert.equal(calls.length, resumeCalls, '补抓的低磨损材料在恢复时也必须保留，不重复请求');
-console.log(`✓ 新分享配方 4 / 3 / 3：半径 0.1 首轮上限约 0.3，自动补抓 8→16 页低磨损材料，产物 ${adaptive.recipes[0].outputWear}，恢复不重抓`);
+console.log(`✓ 新分享配方 4 / 3 / 3：MW 与 FT 全档位材料互补，产物 ${adaptive.recipes[0].outputWear}，恢复不重抓`);
 
 const partialState = { id: 'partial-supplement', items: {} };
 const partialController = new AbortController();
 const partialSteam = { ...adaptiveSteam, async listingsWithFloats(name, options) {
-  if (options.sortBy === 'wear.asc' && options.pages === 16 &&
-      name === `${secondPlan.materialSpecs[0].nameEn} (Field-Tested)`) {
+  if (name === `${secondPlan.materialSpecs[0].nameEn} (Minimal Wear)`) {
+    const result = await adaptiveSteam.listingsWithFloats(name, options);
+    await options.onPage?.(result.listings);
     partialController.abort(new DOMException('补抓超时', 'TimeoutError'));
     throw partialController.signal.reason;
   }
   return adaptiveSteam.listingsWithFloats(name, options);
 } };
 await assert.rejects(new CollectionHunter({ intervalMs: 0, signal: partialController.signal }).huntFromSteam({
-  recipePlan: secondPlan, targetWear: target, band: 0.1, steam: partialSteam, resumeState: partialState,
+  recipePlan: secondPlan, targetWear: target, exteriors: ['fn', 'mw', 'ft', 'ww', 'bs'], steam: partialSteam, resumeState: partialState,
 }), e => e.name === 'TimeoutError');
 assert.ok(partialState.items[secondPlan.materialSpecs[0].id].candidates.some(m => m.paintwear < 0.1));
 const partialCalls = calls.length;
-const recovered = await hunter.huntFromSteam({ recipePlan: secondPlan, targetWear: target, band: 0.1,
+const recovered = await hunter.huntFromSteam({ recipePlan: secondPlan, targetWear: target, exteriors: ['fn', 'mw', 'ft', 'ww', 'bs'],
   steam: adaptiveSteam, resumeState: partialState }, { timeBudgetMs: 500 });
 assert.equal(recovered.ok, true, recovered.message);
 assert.equal(recovered.bestScore, targetInfo.minimumScore);
-assert.equal(calls.length, partialCalls, '已抓到足够的补偿材料，中断后复用候选与首轮请求即可求解');
-console.log('✓ 定向补抓中途超时也保存已到手的低磨损材料，恢复后不丢候选、不重扫');
+assert.ok(calls.length > partialCalls, '中断后继续未完成档位，并保留已抓到的补偿材料');
+console.log('✓ 档位搜索中途超时保存低磨损材料，恢复后继续未完成档位，不丢候选');

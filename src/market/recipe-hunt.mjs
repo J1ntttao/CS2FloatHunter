@@ -462,14 +462,17 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
     const missingPrices = picks.filter(m => !Number.isFinite(m.price)).length;
     const costByCurrency = [...totals].map(([currencyId, total]) => ({ currencyId, total }));
     return { score, exact: score === 0, approximate: score !== 0, outputWear: calculatedWear, outputs,
-      targetOutput: plan.targetOutput.name, cost: !missingPrices && totals.size === 1 && totals.has(23) ? totals.get(23) : null,
+      targetOutput: plan.targetOutput.name, targetOutputIndex: plan.targetOutputIndex ?? 0,
+      targetOutputProbability: plan.targetOutput.probability,
+      cost: !missingPrices && totals.size === 1 && totals.has(23) ? totals.get(23) : null,
       costByCurrency, missingPrices,
       dataSource, statTrak, materials: dataSource === 'both' ? attachOffers(picks, offers) : picks };
   }).sort((a, b) => a.score - b.score || (a.cost ?? Infinity) - (b.cost ?? Infinity));
   if (!recipes.length) return { ok: false, error: 'no_recipe_solution', message: '在指定材料数量和搜索范围内未找到可用组合。', resume: resumeInfo() };
   return {
     ok: true, exteriors, dataSource, collectionName: plan.collection, materialGrade: plan.grade,
-    outRange, targetOutput: plan.targetOutput.name, materialCount: materialBands.length,
+    outRange, targetOutput: plan.targetOutput.name, targetOutputIndex: plan.targetOutputIndex ?? 0,
+    targetOutputProbability: plan.targetOutput.probability, materialCount: materialBands.length,
     reachableRange: feasible.range,
     materialBands: plan.collectionSpecs ? [] : materialBands,
     collectionSpecs: plan.collectionSpecs,

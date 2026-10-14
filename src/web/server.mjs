@@ -185,7 +185,7 @@ async function handleResolve(req, res, url) {
 }
 
 /**
- * 端点：/api/hunt?url=<配方链接>&wear=<想要的产物磨损>&exteriors=fn,mw,ft,ww,bs&interval=&market=buff|steam|both
+ * 端点：/api/hunt?url=<配方链接>&wear=<想要的产物磨损>&output_index=<产物索引>&exteriors=fn,mw,ft,ww,bs&interval=&market=buff|steam|both
  *
  * 与 /api/resolve 的区别：
  *   resolve = 照抄配方里每把材料的目标磨损，去找最接近的真实挂单
@@ -205,6 +205,8 @@ async function handleHunt(req, res, url) {
   const intervalMs = Math.max(1200, Math.min(8000, Number(url.searchParams.get('interval') || 2200)));
   const qualityParam = url.searchParams.get('stattrak');
   const market = normalizeMarket(url.searchParams.get('market'));
+  const outputIndexRaw = url.searchParams.get('output_index');
+  const outputIndex = outputIndexRaw == null || outputIndexRaw === '' ? 0 : Number(outputIndexRaw);
   const allowInsecure = url.searchParams.get('insecure') !== '0';
   // 页面可显式指定代理；留空则交给适配器读环境变量/自动探测
   // 支持 http:// 与 socks5:// 前缀；不写前缀按 http 处理
@@ -213,6 +215,7 @@ async function handleHunt(req, res, url) {
   const resumeId = url.searchParams.get('resume_id') || '';
   const checkpointSignature = JSON.stringify({
     link, wear: wearRaw, exteriors, intervalMs, randomPages, market, quality: qualityParam || null,
+    outputIndex,
   });
 
   sseHead(res);
@@ -274,8 +277,12 @@ async function handleHunt(req, res, url) {
       if (!recipe.ok) { send('error', { message: recipe.message, code: recipe.error }); discardCheckpoint(); return; }
       const located = locateCollection(recipe);
       if (!located.ok) { send('error', { message: located.message, code: located.error }); discardCheckpoint(); return; }
+      if (!Number.isInteger(outputIndex) || outputIndex < 0 || outputIndex >= located.outputSpecs.length) {
+        send('error', { message: `目标产物选择无效：索引 ${outputIndexRaw ?? outputIndex} 超出配方产物范围。`, code: 'invalid_output_index' });
+        discardCheckpoint(); return;
+      }
       const statTrak = qualityParam === '1' ? true : qualityParam === '0' ? false : recipe.statTrak;
-      const loc = planWithQuality(located, statTrak);
+      const loc = planWithQuality(located, statTrak, outputIndex);
       checkpoint.recipe = recipe;
 
       send('located', {
@@ -288,6 +295,9 @@ async function handleHunt(req, res, url) {
         materialCount: loc.materialCount,
         materials: loc.materials,
         targetOutput: loc.targetOutput.name,
+        targetOutputIndex: loc.targetOutputIndex,
+        targetOutputProbability: loc.targetOutput.probability,
+        outputs: loc.outputSpecs,
         recipe: {
           title: recipe.title, recipeLine: recipe.recipeLine,
           inputRarityLabel: recipe.inputRarityLabel, outputRarityLabel: recipe.outputRarityLabel,
@@ -386,6 +396,8 @@ async function handleHunt(req, res, url) {
         collectionBands: r.collectionBands,
         collectionSpecs: r.collectionSpecs,
         targetOutput: r.targetOutput,
+        targetOutputIndex: r.targetOutputIndex,
+        targetOutputProbability: r.targetOutputProbability,
         exactFound: r.exactFound,
         bestScore: r.bestScore,
         reachableRange: r.reachableRange,
@@ -429,7 +441,13 @@ const server = http.createServer(async (req, res) => {
     try {
       const recipe = await fetchShareRecipe(url.searchParams.get('url') || '', { signal: controller.signal });
       if (!recipe.ok) return json(res, 400, { ok: false, message: recipe.message });
-      return json(res, 200, { ok: true, sid: recipe.sid, statTrak: recipe.statTrak });
+      const located = locateCollection(recipe);
+      if (!located.ok) return json(res, 400, { ok: false, message: located.message, error: located.error });
+      const plan = planWithQuality(located, recipe.statTrak);
+      return json(res, 200, {
+        ok: true, sid: recipe.sid, statTrak: recipe.statTrak,
+        outputs: plan.outputSpecs.map((output, index) => ({ ...output, index })),
+      });
     } catch (e) {
       if (!controller.signal.aborted) return json(res, 400, { ok: false, message: e.message });
       return;

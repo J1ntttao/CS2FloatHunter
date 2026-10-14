@@ -17,9 +17,16 @@ export function withStatTrakName(name, statTrak) {
   return statTrak ? `StatTrak™ ${plain}` : plain;
 }
 
-export function planWithQuality(plan, statTrak) {
+export function planWithQuality(plan, statTrak, outputIndex = 0) {
   const outputSpecs = plan.outputSpecs.map(o => ({ ...o, name: withStatTrakName(o.name, statTrak) }));
-  return { ...plan, outputSpecs, targetOutput: outputSpecs[0] };
+  const index = Number.isInteger(outputIndex) && outputIndex >= 0 && outputIndex < outputSpecs.length ? outputIndex : 0;
+  return { ...plan, outputSpecs, targetOutput: outputSpecs[index], targetOutputIndex: index };
+}
+
+/** 按分享链接中的产物索引选择本次反推目标。 */
+export function selectTargetOutput(plan, outputIndex = 0) {
+  if (!Number.isInteger(outputIndex) || outputIndex < 0 || outputIndex >= plan.outputSpecs.length) return null;
+  return { ...plan, targetOutput: plan.outputSpecs[outputIndex], targetOutputIndex: outputIndex };
 }
 
 /** 从分享配方汇总各收藏品投入数量，并确定同等级候选范围。 */

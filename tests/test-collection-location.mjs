@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { findCollectionName, materialsInCollection } from '../src/cs2up/materials.mjs';
-import { locateCollection } from '../src/cs2up/location.mjs';
+import { locateCollection, planWithQuality } from '../src/cs2up/location.mjs';
 
 for (const [input, expected] of [
   ['The Genesis Collection', '创世纪收藏品'],
@@ -37,6 +37,17 @@ assert.deepEqual(result.collectionSpecs.map(m => [m.collection, m.count, m.candi
 ]);
 assert.ok(result.materials.includes('内格夫 | 飞羽 × 6'));
 console.log('✓ 混合配方把 6 / 3 / 1 枪皮数量汇总为收藏品 6 / 4，各展开 7 种同等级材料');
+
+const restricted = materialsInCollection('裂空武器箱收藏品', 'restricted');
+const multiOutput = locateCollection({ ...mixedRecipe, outputs: [
+  { name: restricted[0].name, collection: 'The Fracture Collection', probability: 0.5 },
+  { name: restricted[1].name, collection: 'The Fracture Collection', probability: 0.5 },
+] });
+assert.equal(multiOutput.outputSpecs.length, 2);
+assert.deepEqual(multiOutput.targetOutput, multiOutput.outputSpecs[0]);
+assert.deepEqual(planWithQuality(multiOutput, true, 1).targetOutput, planWithQuality(multiOutput, true).outputSpecs[1]);
+assert.equal(planWithQuality(multiOutput, true, 99).targetOutputIndex, 0);
+console.log('✓ 多产物可按索引选择目标，品质切换保留概率并对越界索引回退第一项');
 
 const deadHand = locateCollection({ ...mixedRecipe, collections: ['The Dead Hand Collection'] });
 assert.equal(deadHand.collection, result.collection);

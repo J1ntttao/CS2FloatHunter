@@ -52,13 +52,14 @@
 
   label{display:block;font-size:10px;color:var(--amber);margin-bottom:6px;
     text-transform:uppercase;letter-spacing:.15em;font-weight:300}
-  input[type=text],input[type=number],textarea{
+  input[type=text],input[type=number],textarea,select{
     width:100%;background:var(--bg);border:1px solid var(--line);border-radius:2px;
     padding:11px 14px;color:var(--fg);font-size:13px;font-weight:300;font-family:inherit;
     outline:none;transition:all .3s ease-out}
   textarea{font-family:var(--mono);font-size:12px;resize:vertical}
   input::placeholder,textarea::placeholder{color:var(--mute)}
-  input:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 1px rgba(196,149,106,.3)}
+  input:focus,textarea:focus,select:focus{border-color:var(--amber);box-shadow:0 0 0 1px rgba(196,149,106,.3)}
+  select:disabled{color:var(--mute);cursor:not-allowed}
 
   .grid3{display:grid;grid-template-columns:1fr 170px 170px;gap:16px;align-items:end}
   .search-params{align-items:start}
@@ -247,6 +248,11 @@
         <input type="number" id="wear" value="0.20001016" step="0.0000001" min="0.000001" max="0.999999">
       </div>
       <div>
+        <label for="targetOutput">目标产物（按概率）</label>
+        <select id="targetOutput" disabled><option value="">读取链接后选择</option></select>
+        <div class="note">目标磨损会按所选产物的完整区间计算。</div>
+      </div>
+      <div>
         <label for="interval">请求间隔 (ms)</label>
         <input type="number" id="interval" value="2200" step="100" min="1200" max="8000">
       </div>
@@ -335,6 +341,31 @@ const MARKET_NOTE = {
   both: 'BUFF 和 Steam 都搜索真实挂单磨损，合并求解；两边价格与购买链接并列，较便宜的价格加粗。',
   steam: '搜索链接收藏品中的全部同等级枪皮，严格保持收藏品数量比例；Steam 挂单按价格排序，某个收藏品材料不足时会明确提示。',
 };
+let recipeOutputs = [];
+let selectedOutputIndex = 0;
+
+function outputNameForQuality(name, statTrak) {
+  const plain = String(name ?? '').replace(/[（(]\s*stattrak™?\s*[)）]|stattrak™?/gi, '').replace(/\s+/g, ' ').trim();
+  return statTrak ? `StatTrak™ ${plain}` : plain;
+}
+
+function outputProbabilityLabel(value) {
+  const n = Number(value);
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(n) ? `${(n * 100).toFixed(2)}%` : '概率未知';
+}
+
+function renderTargetOutputs(outputs, { statTrak = $('stattrak')?.checked, selected = selectedOutputIndex } = {}) {
+  recipeOutputs = Array.isArray(outputs) ? outputs : [];
+  const select = $('targetOutput');
+  if (!select) return;
+  const index = Number.isInteger(Number(selected)) && Number(selected) >= 0 && Number(selected) < recipeOutputs.length ? Number(selected) : 0;
+  selectedOutputIndex = index;
+  select.innerHTML = recipeOutputs.length
+    ? recipeOutputs.map((output, i) => `<option value="${i}">${esc(outputNameForQuality(output.name, statTrak))} · ${outputProbabilityLabel(output.probability)}</option>`).join('')
+    : '<option value="">读取链接后选择</option>';
+  select.value = recipeOutputs.length ? String(index) : '';
+  select.disabled = !recipeOutputs.length;
+}
 
 function statusLine(text, cls = '') {
   const d = document.createElement('div');
@@ -359,12 +390,12 @@ function renderLocated(d) {
         <div class="kv"><span>材料档位</span><strong>${esc(d.grade || '-')}</strong></div>
         <div class="kv"><span>搜索品质</span><strong>${d.statTrak ? '暗金（StatTrak™）' : '普通'}</strong></div>
         <div class="kv"><span>同等级候选枪皮</span><strong>${groups.reduce((n, m) => n + m.candidateCount, 0)}</strong></div>
-        <div class="kv"><span>目标产物</span><strong>${esc(d.targetOutput || '-')}</strong></div>
+        <div class="kv"><span>目标产物</span><strong>${esc(d.targetOutput || '-')} · ${outputProbabilityLabel(d.targetOutputProbability)}</strong></div>
         <div class="kv hero"><span>目标产物磨损</span><strong>${esc(d.targetWear)}</strong></div>
         <div class="kv"><span>配方稀有度</span><strong>${esc(d.recipe?.inputRarityLabel || '?')} → ${esc(d.recipe?.outputRarityLabel || '?')}</strong></div>
         <div class="kv"><span>检索范围</span><strong>${MARKET_LABEL[MARKET]}</strong></div>
       </div>
-      <div class="note" style="margin-top:16px">严格保持以下收藏品投入数量，同收藏品内的同等级枪皮可互相替换；目标磨损针对分享配方列出的第一个产物，其它可能产物分别计算。</div>
+      <div class="note" style="margin-top:16px">严格保持以下收藏品投入数量，同收藏品内的同等级枪皮可互相替换；目标磨损按所选产物的区间计算，其他产物同时列出概率和对应磨损。</div>
       <div style="margin-top:8px">${mats.map(m => `<span class="pill">${esc(m)}</span>`).join('')}</div>
     </section>`;
 }
@@ -474,7 +505,7 @@ function renderResult(d) {
         <div class="kv"><span>数据来源</span><strong>${d.dataSource === 'both' ? 'BUFF + Steam' : d.dataSource === 'steam' ? 'Steam' : 'BUFF'}</strong></div>
         <div class="kv"><span>收藏品 / 档位</span><strong>${esc(d.collection)} · ${esc(d.grade || '-')}</strong></div>
         <div class="kv"><span>产物区间</span><strong>[${(d.outRange || []).join(', ')}]</strong></div>
-        <div class="kv"><span>目标产物</span><strong>${esc(d.targetOutput || '-')}</strong></div>
+        <div class="kv"><span>目标产物</span><strong>${esc(d.targetOutput || '-')} · ${outputProbabilityLabel(d.targetOutputProbability)}</strong></div>
         <div class="kv"><span>候选挂单</span><strong>${d.poolSize}</strong></div>
         ${d.marketCounts && d.dataSource === 'both' ? `<div class="kv"><span>BUFF / Steam 候选</span><strong>${d.marketCounts.buff} / ${d.marketCounts.steam}</strong></div>` : ''}
         <div class="kv ${d.exactFound ? 'good' : ''}"><span>精确命中</span><strong>${d.exactFound ? '是' : '否'}</strong></div>
@@ -507,6 +538,9 @@ async function loadRecipeQuality(sid, version) {
     if (version !== qualityVersion || sid !== qualityInputSid()) return;
     if (!data.ok) throw new Error(data.message || '配方读取失败');
     qualitySid = sid;
+    if (typeof renderTargetOutputs === 'function') renderTargetOutputs(data.outputs || [], {
+      statTrak: qualityOverrideSid === sid ? $('stattrak').checked : data.statTrak, selected: 0,
+    });
     if (qualityOverrideSid !== sid) {
       $('stattrak').checked = !!data.statTrak;
       $('qualityNote').textContent = `链接配方为${data.statTrak ? '暗金' : '普通'}，已自动设置；可手动切换。`;
@@ -523,6 +557,8 @@ function qualityInputChanged() {
   if (sid !== qualityInputCurrent) {
     qualityInputCurrent = sid; qualitySid = null; qualityOverrideSid = null;
     $('stattrak').checked = false;
+    selectedOutputIndex = 0;
+    if (typeof renderTargetOutputs === 'function') renderTargetOutputs([], { statTrak: false, selected: 0 });
   }
   qualityController?.abort();
   clearTimeout(qualityTimer);
@@ -542,7 +578,13 @@ function invalidateResume() {
 $('stattrak').addEventListener('change', () => {
   invalidateResume();
   qualityOverrideSid = qualityInputSid();
+  if (typeof renderTargetOutputs === 'function') renderTargetOutputs(recipeOutputs, { statTrak: $('stattrak').checked, selected: selectedOutputIndex });
   $('qualityNote').textContent = `已手动选择${$('stattrak').checked ? '暗金' : '普通'}搜索；更换配方后重新跟随链接。`;
+});
+
+$('targetOutput')?.addEventListener?.('change', () => {
+  selectedOutputIndex = Number($('targetOutput').value);
+  invalidateResume();
 });
 
 let MARKET = 'buff';
@@ -718,10 +760,13 @@ function startSearch({ resume = false } = {}) {
   const link = $('link').value.trim();
   const w = $('wear').value.trim();
   if (!link) { statusLine('请填写 CS2UP 配方分享链接', 'bad'); return; }
+  if (!resume && typeof recipeOutputs !== 'undefined' && !recipeOutputs.length) { statusLine('正在读取配方产物，请稍候再开始搜索', 'bad'); return; }
   if (!w || !(Number(w) > 0 && Number(w) < 1)) { statusLine('目标磨损需在 0 到 1 之间', 'bad'); return; }
   const selectedExteriors = resume ? activeSearchExteriors : exteriorKeys.filter(k => $('exterior_' + k).checked);
   if (!selectedExteriors?.length) { statusLine('请至少勾选一个搜索品质等级', 'bad'); return; }
-  const options = resume ? activeSearchOptions : { randomPages: $('randomPages')?.value || '0' };
+  const options = resume ? activeSearchOptions : {
+    randomPages: $('randomPages')?.value || '0', outputIndex: typeof selectedOutputIndex === 'number' ? selectedOutputIndex : 0,
+  };
   if (!Number.isInteger(Number(options?.randomPages)) || Number(options.randomPages) < 0 || Number(options.randomPages) > 500) { statusLine('请填写有效的随机页数', 'bad'); return; }
   if (!resume) { activeSearchOptions = options; activeSearchExteriors = selectedExteriors; activeResumeId = null; reset(); }
   $('go').disabled = true;
@@ -735,6 +780,7 @@ function startSearch({ resume = false } = {}) {
   const qs = new URLSearchParams({
     url: link, wear: w, exteriors: selectedExteriors.join(','),
     random_pages: options.randomPages,
+    output_index: String(options.outputIndex ?? 0),
     interval: $('interval').value, market: MARKET,
     insecure: $('insecure').checked ? '1' : '0',
   });
@@ -786,6 +832,9 @@ function startSearch({ resume = false } = {}) {
   listen('resume', e => setResume(JSON.parse(e.data)));
   listen('located', e => {
     const d = JSON.parse(e.data);
+    if (typeof renderTargetOutputs === 'function' && Array.isArray(d.outputs) && d.outputs.length) {
+      renderTargetOutputs(d.outputs, { statTrak: d.statTrak, selected: d.targetOutputIndex ?? selectedOutputIndex });
+    }
     if (d.sid === qualityInputSid() && qualityOverrideSid !== d.sid) {
       qualitySid = d.sid;
       $('stattrak').checked = !!d.statTrak;

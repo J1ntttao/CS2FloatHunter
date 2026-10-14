@@ -474,6 +474,9 @@ try {
   ]) {
     const metadata = await (await fetch(`http://127.0.0.1:${port}/api/recipe?url=${sid}`)).json();
     assert.equal(metadata.ok, true);
+    assert.ok(metadata.outputs.length > 1);
+    assert.equal(metadata.outputs[0].index, 0);
+    assert.ok(Number.isFinite(metadata.outputs[0].probability));
     assert.equal(metadata.statTrak, sid === '1111111111111111');
     const stream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=${sid}&wear=0.2&exteriors=ft,mw&market=steam${choice}`)).text();
     assert.ok(!stream.includes('event: error'), stream);
@@ -483,6 +486,16 @@ try {
     assert.ok(result.recipes.every(r => r.materials.every(m => m.marketHashName.startsWith('StatTrak™ ') === expected)));
   }
   console.log('✓ 真实 API 默认跟随暗金链接，明确 stattrak=0 可关闭暗金，普通链接 stattrak=1 可开启');
+  const selectedMetadata = await (await fetch(`http://127.0.0.1:${port}/api/recipe?url=099784dbf1e1240d`)).json();
+  const selectedStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&exteriors=ft,mw&market=steam&output_index=1`)).text();
+  assert.ok(!selectedStream.includes('event: error'), selectedStream);
+  const selectedResult = JSON.parse(selectedStream.match(/event: result\ndata: ([^\n]+)/)[1]);
+  assert.equal(selectedResult.targetOutputIndex, 1);
+  assert.equal(selectedResult.targetOutput, selectedMetadata.outputs[1].name);
+  assert.equal(selectedResult.targetOutputProbability, selectedMetadata.outputs[1].probability);
+  const invalidOutput = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&exteriors=ft&market=steam&output_index=999`)).text();
+  assert.match(invalidOutput, /invalid_output_index/);
+  console.log('✓ Web 下拉目标索引按所选产物求解并透传概率，越界索引明确报错');
   const bothStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&exteriors=ft,mw&market=both`)).text();
   assert.ok(!bothStream.includes('event: error'), bothStream);
   const bothResult = JSON.parse(bothStream.match(/event: result\ndata: ([^\n]+)/)[1]);

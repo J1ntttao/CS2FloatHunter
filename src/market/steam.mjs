@@ -47,6 +47,34 @@ const EXTERIOR_RANGES = {
   'Battle-Scarred': [0.45, 1],
 };
 
+/** Steam 新版前端 AssetPropertyFilter：property_id=1，float_min=2，float_max=3。 */
+export function steamWearFilter(min, max) {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max > 1 || min > max) {
+    throw new Error('Steam 磨损过滤区间无效');
+  }
+  const bytes = Buffer.alloc(12);
+  bytes[0] = 0x08; bytes[1] = 2;
+  bytes[2] = 0x15; bytes.writeFloatLE(min, 3);
+  bytes[7] = 0x1d; bytes.writeFloatLE(max, 8);
+  return bytes.toString('base64');
+}
+
+function listingQuery(name, min, max, sortBy) {
+  const params = new URLSearchParams();
+  if (min != null || max != null) {
+    params.set('assetproperty', steamWearFilter(min ?? 0, max ?? 1));
+    const exterior = name.match(/\(([^()]*)\)\s*$/)?.[1];
+    const index = Object.keys(EXTERIOR_RANGES).indexOf(exterior);
+    if (index >= 0) params.set('category_Exterior', `WearCategory${index}`);
+    params.set('category_Quality', /^StatTrak™?\s/i.test(name) ? 'strange' : 'normal');
+  }
+  if (sortBy === 'wear.asc' || sortBy === 'wear.desc') {
+    params.set('sort', '1'); params.set('propertyid', '2');
+    params.set('dir', sortBy === 'wear.asc' ? '0' : '1');
+  }
+  return params;
+}
+
 /** 商品身份与挂单实际磨损同时校验，避免聚合页混档或无身份数据被误用。 */
 export function steamListingMatches(listing, marketHashName) {
   if (!listing.marketHashName || listing.marketHashName !== marketHashName) return false;
@@ -131,7 +159,7 @@ function findListingsArrays(node, depth = 0, acc = []) {
     return acc;
   }
   if (node && typeof node === 'object') {
-    if (Array.isArray(node.listings) && node.listings.length && node.listings[0] && node.listings[0].listingid) {
+    if (Array.isArray(node.listings) && (!node.listings.length || node.listings[0]?.listingid)) {
       acc.push(node.listings);
     }
     for (const v of Object.values(node)) findListingsArrays(v, depth + 1, acc);
@@ -283,16 +311,25 @@ export class SteamMarket {
    *
    * 翻页：实测 `?start=20` **有效**（`?cursor=` / `?page=` 会被忽略）。每页固定 20 笔。
    *
-   * ⚠️ 固有限制：Steam 的挂单是**按价格排序**的，不是按磨损。
-   * 因此无法「按磨损区间检索」，只能一页页扫、扫到多少算多少。
-   * 这是 Steam 侧的限制，不是实现问题。
+   * 新版前端支持 assetproperty（protobuf/base64）区间过滤，
+   * 也支持 sort=1&propertyid=2 按磨损排序。仍逐笔核验实际身份与磨损。
    *
    * @param {object} opts
    *   pages   抓多少页（每页 20 笔，默认 3）
    *   cookies 可选，带上登录态可降低风控概率
    * @returns {Promise<{ok:boolean, listings:Array, error?:string, diag?:object, pagesFetched?:number}>}
    */
-  async listingsWithFloats(marketHashName, { cookies = null, pages = 3, resumeState = null } = {}) {
+  async listingsWithFloats(marketHashName, { cookies = null, pages = 3, resumeState = null,
+    minPaintwear = null, maxPaintwear = null, sortBy = 'price' } = {}) {
+    const params = listingQuery(marketHashName, minPaintwear, maxPaintwear, sortBy);
+    const signature = `${marketHashName}?${params}`;
+    if (resumeState) {
+      if (resumeState.signature && resumeState.signature !== signature) {
+        resumeState.listings = []; resumeState.nextPage = 0; delete resumeState.baseUrl;
+        delete resumeState.exhausted;
+      }
+      resumeState.signature = signature;
+    }
     const collected = Array.isArray(resumeState?.listings) ? [...resumeState.listings] : [];
     const seen = new Set();
     for (const l of collected) if (l?.listingId) seen.add(l.listingId);
@@ -302,11 +339,13 @@ export class SteamMarket {
 
     const requestedPages = Math.max(1, pages);
     const firstPage = Math.max(0, Number(resumeState?.nextPage) || 0);
-    for (let page = firstPage; page < requestedPages; page++) {
+    for (let page = firstPage; page < requestedPages && !resumeState?.exhausted; page++) {
       this.signal?.throwIfAborted();
       const start = page * 20;
-      const base = `${ORIGIN}/market/listings/730/${encodeURIComponent(marketHashName)}`;
-      const url = start ? `${base}?start=${start}` : base;
+      const base = resumeState?.baseUrl || `${ORIGIN}/market/listings/730/${encodeURIComponent(marketHashName)}`;
+      const query = new URLSearchParams(params);
+      if (start) query.set('start', String(start));
+      const url = `${base}${query.size ? `?${query}` : ''}`;
       const headers = {
         accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         referer: `${ORIGIN}/market/`,
@@ -317,6 +356,15 @@ export class SteamMarket {
       let r;
       try {
         r = await this.fetch(url, { headers, retries: 2, timeoutMs: 40000 });
+        // 英文名可能跳转到 G... 聚合页并丢掉查询参数；在最终地址重新应用过滤。
+        if (r.status === 200 && r.finalUrl && query.size) {
+          const resolved = new URL(r.finalUrl);
+          if ([...query].some(([key, value]) => resolved.searchParams.get(key) !== value)) {
+            for (const [key, value] of query) resolved.searchParams.set(key, value);
+            r = await this.fetch(resolved.toString(), { headers, retries: 2, timeoutMs: 40000 });
+          }
+          if (resumeState) resumeState.baseUrl = `${resolved.origin}${resolved.pathname}`;
+        }
       } catch (e) {
         this.signal?.throwIfAborted();
           if (page === 0 && !collected.length) return { ok: false, error: `请求挂单页失败：${e.message}`, listings: [] };
@@ -381,6 +429,8 @@ export class SteamMarket {
 
       for (const l of [...parsed.listings, ...parsed.pendingListings]) {
         if (!steamListingMatches(l, marketHashName)) continue;
+        if ((minPaintwear != null && l.floatvalue < minPaintwear) ||
+            (maxPaintwear != null && l.floatvalue > maxPaintwear)) continue;
         if (seen.has(l.listingId)) continue;
         seen.add(l.listingId);
         collected.push(l);
@@ -394,9 +444,12 @@ export class SteamMarket {
       }
 
       // 聚合页可能整页都是其它档位，不能因过滤后为空就误判到底。
-      if (parsed.rawCount === 0) break;
+      if (parsed.rawCount === 0) { if (resumeState) resumeState.exhausted = true; break; }
       // 已抓到的数量达到总量也停
-      if (parsed.rawTotal && start + 20 >= parsed.rawTotal) break;
+      if (parsed.rawTotal && start + 20 >= parsed.rawTotal) {
+        if (resumeState) resumeState.exhausted = true;
+        break;
+      }
     }
 
     if (resumeState) { resumeState.listings = collected; resumeState.nextPage = requestedPages; }

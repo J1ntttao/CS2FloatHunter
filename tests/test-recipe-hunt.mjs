@@ -460,6 +460,14 @@ try {
   assert.equal(result.materialBands.length, 0);
   assert.deepEqual(result.collectionSpecs.map(m => m.count), [9, 1]);
   console.log('✓ 真实 Web SSE 端点传递收藏品比例与同等级候选，并使用替代枪皮产出正确结果');
+  const wideStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&band=0.5&market=steam`)).text();
+  assert.ok(!wideStream.includes('event: error'), wideStream);
+  assert.match(wideStream, /组合搜索半径 0.5/);
+  const wideResult = JSON.parse(wideStream.match(/event: result\ndata: ([^\n]+)/)[1]);
+  assert.ok(wideResult.collectionBands.every(m => m.band[0] === f32(m.range[0]) && m.band[1] > (m.range[0] + m.range[1]) / 2));
+  const invalidRadius = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&band=2&market=steam`)).text();
+  assert.match(invalidRadius, /invalid_search_radius/);
+  console.log('✓ 真实 Web SSE 半径 0.5 未截断，保留宽范围；无效半径明确报错');
   for (const [sid, choice, expected] of [
     ['1111111111111111', '', true], ['1111111111111111', '&stattrak=0', false],
     ['099784dbf1e1240d', '&stattrak=1', true],

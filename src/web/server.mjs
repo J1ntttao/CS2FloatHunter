@@ -196,7 +196,7 @@ async function handleHunt(req, res, url) {
   const link = url.searchParams.get('url') || '';
   const wearRaw = url.searchParams.get('wear');
   const targetWear = Number(wearRaw);
-  const band = Math.max(0.002, Math.min(0.15, Number(url.searchParams.get('band') || 0.03)));
+  const band = Number(url.searchParams.get('band') || 0.03);
   const intervalMs = Math.max(1200, Math.min(8000, Number(url.searchParams.get('interval') || 2200)));
   const qualityParam = url.searchParams.get('stattrak');
   const market = normalizeMarket(url.searchParams.get('market'));
@@ -243,6 +243,11 @@ async function handleHunt(req, res, url) {
     await task.run(async () => {
       if (!wearRaw || !Number.isFinite(targetWear) || targetWear <= 0 || targetWear >= 1) {
         send('error', { message: '请填写想要的产品磨损值（0 到 1 之间的小数，例如 0.2）', code: 'bad_wear' });
+        discardCheckpoint();
+        return;
+      }
+      if (!Number.isFinite(band) || band < 0 || band > 1) {
+        send('error', { message: '组合磨损搜索半径必须在 0 到 1 之间。', code: 'invalid_search_radius' });
         discardCheckpoint();
         return;
       }
@@ -328,7 +333,8 @@ async function handleHunt(req, res, url) {
         send('error', {
           message: r.message,
           code: r.error,
-          detail: { perItem: r.perItem || null, skippedRanges: r.skippedRanges || null },
+          detail: { perItem: r.perItem || null, skippedRanges: r.skippedRanges || null,
+            reachableRange: r.reachableRange || null },
           resume: r.resume || { id: checkpoint.id, canContinue: true, pending: [] },
         });
         return;
@@ -365,6 +371,7 @@ async function handleHunt(req, res, url) {
         targetOutput: r.targetOutput,
         exactFound: r.exactFound,
         bestScore: r.bestScore,
+        reachableRange: r.reachableRange,
         ieee754: r.ieee754,
         targetWear,
         recipes: r.recipes,

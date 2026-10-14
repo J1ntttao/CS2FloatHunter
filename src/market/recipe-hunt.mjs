@@ -4,8 +4,9 @@ import { EXTERIOR_RANGE, parseWearFromName } from './buff.mjs';
 import { steamListingMatches } from './steam.mjs';
 import { steamListingUrl } from './inspect.mjs';
 import { loadCookies } from '../auth/session.mjs';
+import { combinationBands, feasibleCandidates } from './combination-search.mjs';
 import {
-  f32, ieee754Info, normalizeWear, outputWear, recommendedWearFor,
+  f32, ieee754Info, normalizeWear, outputWear, outputTargetInfo, recommendedWearFor,
   requiredAvgNormalized, solveCombinations,
 } from '../tradeup/float.mjs';
 
@@ -72,7 +73,7 @@ function searchSpecsFor(plan) {
 /** 按链接的收藏品配额求解，材料磨损根据目标和完整皮肤区间计算。 */
 export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, timeBudgetMs = 30000, wants = 5 }) {
   const { recipePlan: plan, targetWear, statTrak = false, band = 0.03,
-    dataSource, steam, steamPages = 4, buffPages = 3, resumeState = null } = cfg;
+    dataSource, steam, steamPages = 4, steamMaxPages = 16, buffPages = 3, resumeState = null } = cfg;
   if (!plan?.ok) return { ok: false, error: 'invalid_recipe_plan', message: '缺少有效的分享配方材料清单。' };
   const usesSteam = dataSource === 'steam' || dataSource === 'both';
   const usesBuff = dataSource !== 'steam';
@@ -85,15 +86,15 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
     return { ok: false, error: 'target_out_of_range',
       message: `目标磨损 ${targetWear} 不在产物「${plan.targetOutput.name}」的区间 [${outRange.join(', ')}] 内。` };
   }
-  const materialBands = searchSpecs.map(m => {
-    const wear = recommendedWearFor(...m.range, normalizedTarget);
-    return { ...m, targetWear: wear, band: [Math.max(f32(m.range[0]), wear - band), Math.min(f32(m.range[1]), wear + band)] };
-  });
+  if (!Number.isFinite(band) || band < 0 || band > 1) {
+    return { ok: false, error: 'invalid_search_radius', message: '组合磨损搜索半径必须在 0 到 1 之间。' };
+  }
+  const materialBands = combinationBands(searchSpecs, normalizedTarget, outRange, plan.totalCount, band);
   const quotaText = plan.collectionSpecs
     ? plan.collectionSpecs.map(m => `${m.collection} × ${m.count}`).join('；')
     : materialBands.map(m => `${m.name} × ${m.count}`).join('；');
   onProgress(`${plan.collectionSpecs ? '按链接中的收藏品配额搜索全部同档枪皮' : '严格使用链接中的枪皮'}，共 ${plan.totalCount} 把：${quotaText}`);
-  onProgress(`目标产物「${plan.targetOutput.name}」磨损 ${targetWear}，区间 [${outRange.join(', ')}]；按每种材料的完整区间反推搜索磨损。`);
+  onProgress(`目标产物「${plan.targetOutput.name}」磨损 ${targetWear}，区间 [${outRange.join(', ')}]；需要平均归一化磨损 ${normalizedTarget.toFixed(10)}，允许低磨损与高磨损材料互相补偿，组合搜索半径 ${band}。`);
 
   const pool = [], offers = [], perItem = [], seenOrders = new Set(), assetSlots = new Map();
   const checkpointItems = resumeState ? (resumeState.items ||= {}) : {};
@@ -119,7 +120,9 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
       required: material.count || 0, available, errors };
     // 超时/取消会在当前请求完成前跳出，必须先把当前材料标记为未完成，
     // 否则服务端只能看到之前已完成的材料，页面也不会显示继续按钮。
-    checkpointItems[material.id] = { complete: false, perItem: itemResult };
+    checkpointItems[material.id] = { complete: false, perItem: itemResult,
+      nameEn: material.nameEn, searchBand: material.band,
+      candidates: offers.filter(l => l.recipeMaterialId === material.id) };
     return itemResult;
   };
   if (resumeState) resumeState.pendingMaterials = materialBands.map(m => ({ id: m.id, name: m.name, collection: m.collection }));
@@ -168,16 +171,19 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
   for (const [index, material] of materialBands.entries()) {
     signal?.throwIfAborted();
     const saved = checkpointItems[material.id];
-    if (saved?.complete && Array.isArray(saved.candidates)) {
+    if (saved?.nameEn) material.nameEn = saved.nameEn;
+    if (Array.isArray(saved?.candidates)) {
       for (const listing of saved.candidates) {
-        addListing(listing, material, listing.marketHashName, listing.goodsId, listing.market);
+        addListing(listing, { ...material, band: saved.searchBand || material.band }, listing.marketHashName, listing.goodsId, listing.market);
       }
+    }
+    if (saved?.complete && Array.isArray(saved.candidates)) {
       perItem.push(saved.perItem);
       onProgress(`[${index + 1}/${materialBands.length}] ${material.name}：复用已完成搜索，${saved.perItem.available} 件材料`);
       continue;
     }
     const [lo, hi] = material.band;
-    onProgress(`[${index + 1}/${materialBands.length}] ${material.name}${material.count ? ` × ${material.count}` : ''}：材料目标磨损 ${material.targetWear.toFixed(10)}，搜索 [${lo.toFixed(6)}, ${hi.toFixed(6)}]`);
+    onProgress(`[${index + 1}/${materialBands.length}] ${material.name}${material.count ? ` × ${material.count}` : ''}：按组合剩余磨损预算搜索 [${lo.toFixed(6)}, ${hi.toFixed(6)}]`);
     const errors = [];
     let variants = [];
     try {
@@ -209,7 +215,8 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
           onProgress(`  抓取 ${name} 的 Steam 挂单 ...`);
           const pageState = resumeState ? ((resumeState.steamPages ||= {})[name] ||= {}) : null;
           const result = await request(`steam:listings:${name}`, () =>
-            steam.listingsWithFloats(name, { cookies, pages: steamPages, resumeState: pageState }));
+            steam.listingsWithFloats(name, { cookies, pages: steamPages, resumeState: pageState,
+              minPaintwear: lo, maxPaintwear: hi }));
           for (const listing of result.listings || []) addListing(listing, material, name, undefined, 'steam');
           if (!result.ok || result.partial) {
             errors.push(`Steam：${result.error || '挂单查询失败'}`);
@@ -251,9 +258,68 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
     if (resumeState) {
       signal?.throwIfAborted();
       resumeState.items[material.id] = { complete: errors.length === 0, perItem: itemResult,
+        nameEn: material.nameEn, searchBand: saved?.searchBand || material.band,
         candidates: offers.filter(listing => listing.recipeMaterialId === material.id) };
     }
     onProgress(`  ${material.name}：找到 ${available} 件不同的真实材料${material.count ? `，需要 ${material.count} 件` : ''}${errors.length ? `（${errors.join('；')}）` : ''}`);
+  }
+  const quotaSpecs = plan.collectionSpecs || materialBands;
+  const quotas = Object.fromEntries(quotaSpecs.map(m => [m.id, m.count]));
+  const targetSum = normalizedTarget * plan.totalCount;
+  let feasible = feasibleCandidates(pool, quotas, targetSum, outRange, plan.totalCount);
+  // 候选偏高时自动补抓低磨损；不是看到当前前几页的下界就宣布整个市场不可达。
+  if (usesSteam && !feasible.reachable && !feasible.shortage) {
+    const lower = targetWear < feasible.range[0];
+    const direction = lower ? '低' : '高';
+    const supplementBands = materialBands.map(m => {
+      const center = recommendedWearFor(...m.range, normalizedTarget);
+      return { ...m, band: lower ? [f32(m.range[0]), Math.max(center, m.band[1])]
+        : [Math.min(center, m.band[0]), f32(m.range[1])] };
+    });
+    const supplementalPages = resumeState ? (resumeState.steamPages ||= {}) : {};
+    for (const pages of [...new Set([Math.min(steamMaxPages, steamPages * 2), steamMaxPages])]) {
+      if (feasible.reachable) break;
+      onProgress(`当前挂单产物${lower ? '下' : '上'}界无法覆盖目标 ${targetWear}；定向补抓${direction}磨损材料，按磨损${lower ? '升' : '降'}序最多 ${pages} 页。`);
+      for (const material of supplementBands) {
+        signal?.throwIfAborted();
+        const original = perItem.find(m => m.group === material.quotaGroupId && m.name === material.name);
+        const errors = [];
+        const [lo, hi] = material.band;
+        const names = steamNames(material, statTrak, lo, hi);
+        if (!names.length) continue; // 商品身份查询失败由首轮重试处理。
+        try {
+          for (const name of names) {
+            const key = `steam:supplement:${lower ? 'low' : 'high'}:${name}:${lo}:${hi}`;
+            const pageState = supplementalPages[key] ||= {};
+            onProgress(`  补抓${direction}磨损 ${name}，区间 [${lo.toFixed(6)}, ${hi.toFixed(6)}] ...`);
+            const result = await request(`${key}:${pages}`, () => steam.listingsWithFloats(name, {
+              cookies, pages, resumeState: pageState, minPaintwear: lo, maxPaintwear: hi,
+              sortBy: lower ? 'wear.asc' : 'wear.desc',
+            }));
+            for (const listing of result.listings || []) addListing(listing, material, name, undefined, 'steam');
+            if (!result.ok || result.partial) errors.push(`Steam 补抓：${result.error || '挂单查询失败'}`);
+          }
+        } catch (e) {
+          if (signal?.aborted) {
+            saveInterruptedItem(material, [`补抓中断：${e?.message || String(e)}`]);
+            throw e;
+          }
+          errors.push(`Steam 补抓：${e?.message || String(e)}`);
+        }
+        if (original) {
+          original.available = pool.filter(l => l.recipeMaterialId === material.id).length;
+          original.errors.push(...errors);
+        }
+        if (resumeState) checkpointItems[material.id] = {
+          complete: !original?.errors.length, perItem: original,
+          searchBand: material.band, nameEn: material.nameEn,
+          candidates: offers.filter(l => l.recipeMaterialId === material.id),
+        };
+        feasible = feasibleCandidates(pool, quotas, targetSum, outRange, plan.totalCount);
+        if (feasible.reachable) break;
+      }
+    }
+    onProgress(`定向补抓结束：候选 ${pool.length} 笔${feasible.range ? `，当前产物磨损下界 ${feasible.range[0].toFixed(10)}` : ''}。`);
   }
   const shortages = plan.collectionSpecs
     ? plan.collectionSpecs.map(group => ({ ...group,
@@ -268,8 +334,13 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
         (m.errors?.length ? `（${m.errors.join('；')}）` : '')).join('；') + '。可调大磨损搜索半径或增加抓取页数后重试。',
   };
   onProgress(`候选池 ${pool.length} 笔，按链接中的${plan.collectionSpecs ? '收藏品' : '材料'}固定数量求解 ...`);
-  const quotaSpecs = plan.collectionSpecs || materialBands;
-  const quotas = Object.fromEntries(quotaSpecs.map(m => [m.id, m.count]));
+  if (!feasible.reachable) return {
+    ok: false, error: 'target_not_reachable', poolSize: pool.length, perItem, resume: resumeInfo(),
+    reachableRange: feasible.range,
+    message: `${usesSteam ? '已定向补抓材料，但' : ''}当前已抓挂单仍无法拟合目标 ${targetWear}：固定配额的产物磨损${targetWear < feasible.range[0] ? '下界' : '上界'}为 ${feasible.range[targetWear < feasible.range[0] ? 0 : 1].toFixed(10)}。这只是本次抓取范围的限制，不能据此判定整个市场不可达；不会将偏离目标的组合作为推荐配方。`,
+  };
+  pool.splice(0, pool.length, ...feasible.pool);
+  onProgress(`已排除 ${feasible.pruned} 笔无法补足目标总磨损的挂单，保留 ${pool.length} 笔，按真实 float32 产物误差求解。`);
   pool.sort((a, b) => a.price - b.price);
   const solved = solveCombinations(pool.map(m => m.norm), {
     count: plan.totalCount, outMin: outRange[0], outMax: outRange[1], targetOut: targetWear,
@@ -302,6 +373,7 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
   return {
     ok: true, dataSource, collectionName: plan.collection, materialGrade: plan.grade,
     outRange, targetOutput: plan.targetOutput.name, materialCount: materialBands.length,
+    reachableRange: feasible.range,
     materialBands: plan.collectionSpecs ? [] : materialBands,
     collectionSpecs: plan.collectionSpecs,
     collectionBands: plan.collectionSpecs ? materialBands : [],
@@ -309,7 +381,8 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, tim
     skippedRanges: [], band: [Math.min(...materialBands.map(m => m.band[0])), Math.max(...materialBands.map(m => m.band[1]))],
     poolSize: pool.length, exactFound: recipes.some(r => r.exact), bestScore: recipes[0].score,
     marketCounts: { buff: pool.filter(m => m.market === 'buff').length, steam: pool.filter(m => m.market === 'steam').length },
-    statTrak, perItem, steamItems: usesSteam ? { perItem } : null, ieee754: ieee754Info(targetWear), recipes,
+    statTrak, perItem, steamItems: usesSteam ? { perItem } : null,
+    ieee754: { ...ieee754Info(targetWear), outputTarget: outputTargetInfo(targetWear, plan.totalCount, ...outRange) }, recipes,
     resume: resumeInfo(),
   };
 }

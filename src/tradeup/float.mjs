@@ -111,6 +111,23 @@ export function outputWearFromNormalizedSum(normSum, count, outMin, outMax) {
   return f32(mn + f32(avgNormalized * f32(mx - mn)));
 }
 
+/** 可表示的 float32 目标仍可能被 sum/count 的量化跳过，计算产物公式的理论误差下限。 */
+export function outputTargetInfo(targetOut, count, outMin, outMax) {
+  const want = f32(targetOut);
+  const buffer = new ArrayBuffer(4), floats = new Float32Array(buffer), bits = new Uint32Array(buffer);
+  floats[0] = f32(count);
+  const end = bits[0];
+  const outputAt = bit => { bits[0] = bit; return outputWearFromNormalizedSum(floats[0], count, outMin, outMax); };
+  let lo = 0, hi = end;
+  while (lo < hi) {
+    const mid = lo + Math.floor((hi - lo) / 2);
+    if (outputAt(mid) < want) lo = mid + 1; else hi = mid;
+  }
+  const nearestOutputs = [...new Set([outputAt(Math.max(0, lo - 1)), outputAt(lo)])].sort((a, b) => a - b);
+  const minimumScore = Math.min(...nearestOutputs.map(v => Math.abs(v - want)));
+  return { exact: minimumScore === 0, minimumScore, nearestOutputs };
+}
+
 /**
  * 反推：要得到 targetOut，材料的平均归一化值必须是多少。
  * 逐字对应站点 script.js:2085：
@@ -232,8 +249,8 @@ export function meetInTheMiddle(normPool, count, wantSum, cfg = {}) {
  * 在**归一化空间**里做子集和：每个候选的贡献值是 normalizeWear(...)，
  * 目标是 requiredNormalizedSum(...)。
  *
- * 策略：随机重启 + 局部搜索（单点替换，增量更新），
- * 再用「2 换 2」穷举抛光把最后 1~2 个 ULP 磨平。
+ * 策略：随机重启 + 局部搜索（单点替换，真实 float32 评分），
+ * 再用「2 换 2」的剩余总和查找把最后 1~2 个 ULP 磨平。
  *
  * @param {number[]} normPool 每个候选的归一化值（float32）
  * @param {object} cfg
@@ -293,24 +310,25 @@ export function solveCombinations(normPool, cfg) {
   const allowedIdx = groupOf
     ? [...Array(N).keys()].filter(i => allowedGroups.has(groupOf[i]))
     : [...Array(N).keys()];
-  const normPoolEff = normPool;
 
   const wantF32 = f32(targetOut);
+  const targetInfo = outputTargetInfo(targetOut, count, outMin, outMax);
   const deadline = Date.now() + timeBudgetMs;
 
   const scoreFromSum = sum => Math.abs(outputWearFromNormalizedSum(f32(sum), count, outMin, outMax) - wantF32);
-  const sumOf = idx => { let s = 0; for (const i of idx) s = f32(s + f32(normPool[i])); return s; };
+  // 评分与返回材料保持同一顺序；float32 累加不能用减旧加新的估算代替。
+  const sumOf = idx => { let s = 0; for (const i of [...idx].sort((a, b) => a - b)) s = f32(s + f32(normPool[i])); return s; };
 
   const results = [];
   const seen = new Set();
   const keyOf = idx => [...idx].sort((a, b) => a - b).join(',');
-  const pushIfNew = (idx, sum) => {
+  const pushIfNew = idx => {
     if (quotas && (idx.length !== count || new Set(idx).size !== count ||
         [...quotas].some(([g, n]) => idx.filter(i => groupOf[i] === g).length !== n))) return false;
     const k = keyOf(idx);
     if (seen.has(k)) return false;
     seen.add(k);
-    results.push({ indices: [...idx].sort((a, b) => a - b), score: scoreFromSum(sum) });
+    results.push({ indices: [...idx].sort((a, b) => a - b), score: scoreFromSum(sumOf(idx)) });
     return true;
   };
 
@@ -399,11 +417,13 @@ export function solveCombinations(normPool, cfg) {
     const inSet = new Set(cur);
     let sum = sumOf(cur);
     let curScore = scoreFromSum(sum);
+    if (curScore <= targetInfo.minimumScore) return { idx: cur, sum, score: curScore };
     let improved = true, iter = 0;
 
-    while (improved && iter < 40) {
+    while (improved && iter < 40 && Date.now() < deadline) {
       improved = false; iter++;
       for (let pos = 0; pos < cur.length; pos++) {
+        const oldIdx = cur[pos];
         const oldVal = normPool[cur[pos]];
         let bestIdx = cur[pos], bestScore = curScore;
         const cands = candidatesFor(cur[pos]);
@@ -412,16 +432,18 @@ export function solveCombinations(normPool, cfg) {
           if (inSet.has(c)) continue;
           const nv = normPool[c];
           if (nv === oldVal) continue;
-          const s = scoreFromSum(f32(sum - oldVal + nv));
+          cur[pos] = c;
+          const s = scoreFromSum(sumOf(cur));
+          cur[pos] = oldIdx;
           if (s < bestScore) { bestScore = s; bestIdx = c; }
           if (s === 0) { bestIdx = c; bestScore = 0; break; }
         }
         if (bestIdx !== cur[pos]) {
           inSet.delete(cur[pos]); inSet.add(bestIdx);
-          sum = f32(sum - oldVal + normPool[bestIdx]);
-          cur[pos] = bestIdx; curScore = bestScore; improved = true;
+          cur[pos] = bestIdx;
+          sum = sumOf(cur); curScore = bestScore; improved = true;
         }
-        if (curScore === 0) return { idx: cur, sum, score: 0 };
+        if (curScore <= targetInfo.minimumScore) return { idx: cur, sum, score: curScore };
       }
     }
     return { idx: cur, sum, score: curScore };
@@ -429,12 +451,18 @@ export function solveCombinations(normPool, cfg) {
 
   let exactFound = false;
   const startTime = Date.now();
+  const searchDeadline = deadline - Math.min(2000, Math.max(0, timeBudgetMs * 0.2));
   for (let t = 0; t < tries; t++) {
-    if (Date.now() > deadline) break;
+    if (t > 0 && Date.now() > searchDeadline) break;
     const seed = t % 3 === 0 ? greedySeed() : (t % 3 === 1 ? randomSeed() : greedySeed().slice().reverse());
-    const { idx, sum, score: s } = localSearch(seed);
-    if (pushIfNew(idx, sum) && s === 0) { exactFound = true; break; }
-    if (results.length >= maxResults * 4) break;
+    let { idx, sum, score: s } = localSearch(seed);
+    // 单换可能卡在局部最优；在重启早期就尝试剩余预算的二元补偿。
+    if (s > targetInfo.minimumScore && t < 8 && Date.now() < searchDeadline) {
+      const improved = polish({ indices: idx, score: s }, Math.min(50, searchDeadline - Date.now()));
+      if (improved.score < s) ({ idx, sum, score: s } = localSearch(improved.indices));
+    }
+    pushIfNew(idx);
+    if (s <= targetInfo.minimumScore) { exactFound = s === 0; break; }
   }
 
   // 若启发式搜索没能精确命中，且不涉及收藏品约束，就用相遇中点做**确定性**精确求解。
@@ -442,14 +470,15 @@ export function solveCombinations(normPool, cfg) {
   // 所以调用方应该先用 --band / --limit 把候选压到几十个（站点也是这么建议的）。
   // 这里用 maxPerSide 严格把关，超限时 MEET-IN-THE-MIDDLE 会返回 null，不影响其他路径。
   let mitmInfo = null;
-  if (!exactFound && !groupOf && count % 2 === 0 && Date.now() < deadline) {
+  if (!exactFound && !groupOf && count % 2 === 0 && Date.now() < deadline &&
+      !results.some(r => r.score <= targetInfo.minimumScore)) {
     const mitm = meetInTheMiddle(normPool, count, wantSum, {
       maxPerSide: 200_000, maxResults: Math.max(maxResults * 2, 20),
     });
     if (mitm) {
       mitmInfo = { leftCount: mitm.leftCount, rightCount: mitm.rightCount, hits: mitm.pairs.length };
       for (const p of mitm.pairs) {
-        if (pushIfNew(p.indices, p.sum)) {
+        if (pushIfNew(p.indices)) {
           if (scoreFromSum(p.sum) === 0) { exactFound = true; break; }
         }
       }
@@ -458,51 +487,61 @@ export function solveCombinations(normPool, cfg) {
     }
   }
 
-  /** 2 换 2 穷举抛光：单点替换会卡在需要同时换两个才更好的局部最优上。
+  /** 2 换 2 抛光：单点替换会卡在需要同时换两个才更好的局部最优上。
    *  混收藏品模式下，替换项必须与被打掉的位置同属一个收藏品。
    *
    *  关键正确性细节：不能用 `f32(f32(sum - va) - vb)` 这类增量减法来算替换后的和。
    *  float32 加法不满足结合律，`f32(f32(sum−va)−vb)` 与「真正把那两项换掉后逐项累加」
    *  的结果可能差 1 个 ULP，于是候选会被一个**并非它真实得分**的分数评分并写进结果
    *  （表现为 bestScore=0 但复核却不命中）。所以这里老老实实重新累加。 */
-  const polish = (entry, budgetMs = 2000) => {
-    if (!entry || entry.score === 0) return entry;
-    const pDeadline = Date.now() + budgetMs;
+  function polish(entry, budgetMs = 2000) {
+    if (!entry || entry.score <= targetInfo.minimumScore) return entry;
+    const pDeadline = Math.min(deadline, Date.now() + budgetMs);
     const cur = [...entry.indices];
     const inSet = new Set(cur);
     let bestScore = entry.score, bestPair = null;
 
-    const candsFor = (i) => {
-      if (!groupOf) return null;
-      return groupMembers.get(groupOf[i]) || [];
+    const sorted = new Map();
+    const candsFor = i => {
+      const key = groupOf ? groupOf[i] : '__all__';
+      if (!sorted.has(key)) sorted.set(key, (groupOf ? groupMembers.get(key) : allowedIdx)
+        .filter(c => !inSet.has(c)).sort((a, b) => normPool[a] - normPool[b] || a - b));
+      return sorted.get(key);
+    };
+    const lowerBound = (list, value) => {
+      let lo = 0, hi = list.length;
+      while (lo < hi) { const mid = (lo + hi) >>> 1;
+        if (normPool[list[mid]] < value) lo = mid + 1; else hi = mid;
+      }
+      return lo;
     };
 
     /** 把 cur 的第 a、b 项换成 x、y 后，逐项累加得到的真实 float32 和 */
     const sumWith = (a, b, x, y) => {
-      let s = 0;
-      for (let i = 0; i < cur.length; i++) {
-        const v = i === a ? normPool[x] : i === b ? normPool[y] : normPool[cur[i]];
-        s = f32(s + f32(v));
-      }
-      return s;
+      const next = [...cur]; next[a] = x; next[b] = y;
+      return sumOf(next);
     };
 
     for (let a = 0; a < cur.length && Date.now() < pDeadline; a++) {
-      const listA = candsFor(cur[a]) || Array.from({ length: N }, (_, i) => i);
-      for (let b = a + 1; b < cur.length; b++) {
-        const listB = candsFor(cur[b]) || Array.from({ length: N }, (_, i) => i);
+      const listA = candsFor(cur[a]);
+      for (let b = a + 1; b < cur.length && Date.now() < pDeadline; b++) {
+        const listB = candsFor(cur[b]);
+        const remaining = cur.reduce((s, i, pos) => s + (pos === a || pos === b ? 0 : normPool[i]), 0);
         for (const x of listA) {
-          if (inSet.has(x)) continue;
-          for (const y of listB) {
-            if (inSet.has(y) || y === x) continue;
+          if (Date.now() >= pDeadline) break;
+          // 第一个替换确定后，只查剩余目标总和附近的第二个候选。
+          const center = lowerBound(listB, wantSum - remaining - normPool[x]);
+          for (let j = Math.max(0, center - 4); j < Math.min(listB.length, center + 5); j++) {
+            const y = listB[j];
+            if (y === x) continue;
             const s = scoreFromSum(sumWith(a, b, x, y));
-            if (s < bestScore) { bestScore = s; bestPair = { a, b, x, y }; if (s === 0) break; }
+            if (s < bestScore) { bestScore = s; bestPair = { a, b, x, y }; if (s <= targetInfo.minimumScore) break; }
           }
-          if (bestScore === 0) break;
+          if (bestScore <= targetInfo.minimumScore) break;
         }
-        if (bestScore === 0) break;
+        if (bestScore <= targetInfo.minimumScore) break;
       }
-      if (bestScore === 0) break;
+      if (bestScore <= targetInfo.minimumScore) break;
     }
     if (!bestPair) return entry;
     const next = [...cur];
@@ -511,11 +550,11 @@ export function solveCombinations(normPool, cfg) {
     next.sort((p, q) => p - q);
     // 用真实和重新给一次分，杜绝把“估算分”当成真实分
     return { indices: next, score: scoreFromSum(sumOf(next)) };
-  };
+  }
 
   results.sort((a, b) => a.score - b.score);
   if (!exactFound && results.length && results[0].score > 0) {
-    const budget = Math.max(500, Math.min(4000, deadline - Date.now()));
+    const budget = Math.max(0, Math.min(4000, deadline - Date.now()));
     const polished = polish(results[0], budget);
     if (polished.score < results[0].score) {
       results[0] = polished;
@@ -524,9 +563,7 @@ export function solveCombinations(normPool, cfg) {
   }
   results.sort((a, b) => a.score - b.score);
 
-  // 收尾自检：所有启发式步骤（局部搜索的增量更新、抛光）都是用“估算和”打分的，
-  // 而 float32 加法不满足结合律，估算和可能与真实和差 1 个 ULP。
-  // 这里统一用真实和逐项重算一遍分数，保证返回的 score 就是复核时会得到的分数。
+  // 收尾自检：统一按返回顺序重算 float32 分数，保证 score 与材料复核一致。
   for (const r of results) {
     r.score = scoreFromSum(sumOf(r.indices));
   }
@@ -549,6 +586,7 @@ export function solveCombinations(normPool, cfg) {
     poolSize: N,
     elapsedMs: Date.now() - startTime,
     wantSum,
+    minimumPossibleScore: targetInfo.minimumScore,
     mitm: mitmInfo,
   };
 }

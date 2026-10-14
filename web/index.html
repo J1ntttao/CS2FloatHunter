@@ -58,6 +58,7 @@
   input:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 1px rgba(196,149,106,.3)}
 
   .grid3{display:grid;grid-template-columns:1fr 170px 170px;gap:16px;align-items:end}
+  .search-params{align-items:start}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
   @media(max-width:900px){.grid3,.grid2{grid-template-columns:1fr}}
 
@@ -236,20 +237,21 @@
     <label class="check"><input type="checkbox" id="stattrak"> 暗金（StatTrak™）</label>
     <div class="note" id="qualityNote">读取链接后自动跟随配方品质，可手动切换。</div>
 
-    <div class="grid3" style="margin-top:18px">
+    <div class="grid3 search-params" style="margin-top:18px">
       <div>
         <label for="wear">目标产物磨损</label>
         <input type="number" id="wear" value="0.22222222" step="0.0000001" min="0.000001" max="0.999999">
       </div>
       <div>
-        <label for="band">磨损搜索半径</label>
-        <input type="number" id="band" value="0.2" step="0.005" min="0.002" max="0.15">
+        <label for="band">组合磨损搜索半径</label>
+        <input type="number" id="band" value="0.03" step="0.005" min="0" max="1" aria-describedby="bandHelp">
       </div>
       <div>
         <label for="interval">请求间隔 (ms)</label>
         <input type="number" id="interval" value="2200" step="100" min="1200" max="8000">
       </div>
     </div>
+    <div class="note" id="bandHelp">半径控制首轮目标附近的检索范围；材料磨损偏高时，会定向补抓低磨损材料，按整组平均值求解。</div>
 
     <div style="margin-top:20px">
       <label>检索范围</label>
@@ -432,7 +434,9 @@ function recipeCard(r, idx) {
 
 function renderResult(d) {
   const ie = d.ieee754 || {};
-  const ieBox = ie.exact
+  const ieBox = ie.outputTarget && !ie.outputTarget.exact
+    ? `<div class="msg warn">目标 ${esc(d.targetWear)} 转为单精度后是 ${wearFmt(ie.asFloat32)}，但 10 把材料的产物公式无法精确得到该值。理论最近产物：${ie.outputTarget.nearestOutputs.map(wearFmt).join(' / ')}；最小误差 ${Number(ie.outputTarget.minimumScore).toExponential(3)}。</div>`
+    : ie.exact
     ? '<div class="msg good">目标磨损在 IEEE754 单精度下可精确表示。</div>'
     : `<div class="msg warn">${esc(d.targetWear)} 在单精度下不存在，游戏里落到 ${esc(ie.asFloat32)}（间距 ${Number(ie.spacing).toExponential(3)}），下面按该值求解。</div>`;
 
@@ -457,8 +461,8 @@ function renderResult(d) {
       </div>
       ${skipped}
       ${(d.collectionSpecs || []).length ? `<div class="note" style="margin-top:16px">固定收藏品数量：${d.collectionSpecs.map(m => `${esc(m.collection)} × ${m.count}`).join('；')}</div>` : ''}
-      ${(d.collectionBands || []).length ? `<details style="margin-top:16px"><summary>查看 ${d.collectionBands.length} 种候选枪皮的磨损搜索范围</summary><div class="note">${d.collectionBands.map(m => `${esc(m.collection)} · ${esc(m.name)}：材料目标磨损 ${wearFmt(m.targetWear)}，搜索 [${m.band.map(v => Number(v).toFixed(6)).join(', ')}]`).join('<br>')}</div></details>` : ''}
-      ${(d.materialBands || []).length ? `<div class="note" style="margin-top:16px">${d.materialBands.map(m => `${esc(m.name)} × ${m.count}：材料目标磨损 ${wearFmt(m.targetWear)}，搜索 [${m.band.map(v => Number(v).toFixed(6)).join(', ')}]`).join('<br>')}</div>` : ''}
+      ${(d.collectionBands || []).length ? `<details style="margin-top:16px"><summary>查看 ${d.collectionBands.length} 种候选枪皮的磨损搜索范围</summary><div class="note">低磨损与高磨损材料可互相补偿，最终按整组平均归一化磨损求解。<br>${d.collectionBands.map(m => `${esc(m.collection)} · ${esc(m.name)}：组合可用区间 [${m.band.map(v => Number(v).toFixed(6)).join(', ')}]`).join('<br>')}</div></details>` : ''}
+      ${(d.materialBands || []).length ? `<div class="note" style="margin-top:16px">${d.materialBands.map(m => `${esc(m.name)} × ${m.count}：组合可用区间 [${m.band.map(v => Number(v).toFixed(6)).join(', ')}]`).join('<br>')}</div>` : ''}
     </section>
     <span class="sect-label" id="recipes">推荐配方 ${d.recipes.length} 组</span>
     <section class="card" style="padding:0;border:none">

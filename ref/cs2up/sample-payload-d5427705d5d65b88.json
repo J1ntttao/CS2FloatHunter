@@ -1,0 +1,182 @@
+{
+  "created_at": 1791938308627,
+  "title": "封装的创世终端机 X 谍影武器箱 X 蔓藤纹武器箱",
+  "subtitle": "普通",
+  "recipe_line": "6打1打3｜军规级→受限级",
+  "matchup": "6打1打3",
+  "input_rarity_label": "军规级",
+  "output_rarity_label": "受限级",
+  "stattrak": false,
+  "metrics": {
+    "cost": 10.72,
+    "expected": 13.199799999999998,
+    "roi": 0.23132462686567137,
+    "break_even_rate": 0.5199999999999999,
+    "eco_break_even_rate": 0.39999999999999997,
+    "max_output": 27.34,
+    "max_profit": 16.619999999999997
+  },
+  "materials": [
+    {
+      "name": "MAG-7 | MAGnitude (Field-Tested)",
+      "cn": "MAG-7 | 震级 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "wear": 0.174,
+      "unit_price": 0.63
+    },
+    {
+      "name": "MAG-7 | MAGnitude (Field-Tested)",
+      "cn": "MAG-7 | 震级 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "wear": 0.174,
+      "unit_price": 0.63
+    },
+    {
+      "name": "MAG-7 | MAGnitude (Field-Tested)",
+      "cn": "MAG-7 | 震级 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "wear": 0.174,
+      "unit_price": 0.63
+    },
+    {
+      "name": "MAG-7 | MAGnitude (Field-Tested)",
+      "cn": "MAG-7 | 震级 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "wear": 0.174,
+      "unit_price": 0.63
+    },
+    {
+      "name": "MAG-7 | MAGnitude (Field-Tested)",
+      "cn": "MAG-7 | 震级 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "wear": 0.174,
+      "unit_price": 0.63
+    },
+    {
+      "name": "MAG-7 | MAGnitude (Field-Tested)",
+      "cn": "MAG-7 | 震级 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "wear": 0.174,
+      "unit_price": 0.63
+    },
+    {
+      "name": "AUG | Signal Scanner (Well-Worn)",
+      "cn": "AUG | 侦测仪 (破损不堪)",
+      "collection": "The Spy Tech Collection",
+      "wear": 0.398,
+      "unit_price": 1.72
+    },
+    {
+      "name": "MAC-10 | Arabesque Mosaic (Well-Worn)",
+      "cn": "MAC-10 | 阿拉伯式马赛克 (破损不堪)",
+      "collection": "The Arabesque Collection",
+      "wear": 0.418,
+      "unit_price": 1.74
+    },
+    {
+      "name": "MAC-10 | Arabesque Mosaic (Well-Worn)",
+      "cn": "MAC-10 | 阿拉伯式马赛克 (破损不堪)",
+      "collection": "The Arabesque Collection",
+      "wear": 0.418,
+      "unit_price": 1.74
+    },
+    {
+      "name": "MAC-10 | Arabesque Mosaic (Well-Worn)",
+      "cn": "MAC-10 | 阿拉伯式马赛克 (破损不堪)",
+      "collection": "The Arabesque Collection",
+      "wear": 0.418,
+      "unit_price": 1.74
+    }
+  ],
+  "outputs": [
+    {
+      "name": "P250 | Lotus Imprint (Field-Tested)",
+      "cn": "P250 | 莲花印 (久经沙场)",
+      "collection": "The Arabesque Collection",
+      "probability": 0.09999999999999999,
+      "expected_wear": 0.2696
+    },
+    {
+      "name": "AUG | Lapis Lazuli (Field-Tested)",
+      "cn": "AUG | 星点天青 (久经沙场)",
+      "collection": "The Arabesque Collection",
+      "probability": 0.09999999999999999,
+      "expected_wear": 0.2696
+    },
+    {
+      "name": "Glock-18 | Ifrit Lattice (Field-Tested)",
+      "cn": "格洛克18型 | 火灵纹阵 (久经沙场)",
+      "collection": "The Arabesque Collection",
+      "probability": 0.09999999999999999,
+      "expected_wear": 0.2696
+    },
+    {
+      "name": "AWP | Black Box (Field-Tested)",
+      "cn": "AWP | 黑匣子 (久经沙场)",
+      "collection": "The Spy Tech Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.2696
+    },
+    {
+      "name": "Nova | Smart Gun (Field-Tested)",
+      "cn": "新星 | 枪工智能 (久经沙场)",
+      "collection": "The Spy Tech Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.2696
+    },
+    {
+      "name": "CZ75-Auto | Hydraulics (Field-Tested)",
+      "cn": "CZ75自动型 | 液压 (久经沙场)",
+      "collection": "The Spy Tech Collection",
+      "probability": 0.03333333333333333,
+      "expected_wear": 0.2696
+    },
+    {
+      "name": "M4A1-S | Liquidation (Field-Tested)",
+      "cn": "M4A1消音版 | 液化 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "probability": 0.12,
+      "expected_wear": 0.2696
+    },
+    {
+      "name": "Nova | Ocular (Field-Tested)",
+      "cn": "新星 | 目镜 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "probability": 0.12,
+      "expected_wear": 0.2696
+    },
+    {
+      "name": "Dual Berettas | Angel Eyes (Field-Tested)",
+      "cn": "双持贝瑞塔 | 天矢之眼 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "probability": 0.12,
+      "expected_wear": 0.2696
+    },
+    {
+      "name": "UMP-45 | Continuum (Field-Tested)",
+      "cn": "UMP-45 | 连续体 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "probability": 0.12,
+      "expected_wear": 0.2696
+    },
+    {
+      "name": "MAC-10 | Cat Fight (Field-Tested)",
+      "cn": "MAC-10 | 纸老虎 (久经沙场)",
+      "collection": "The Genesis Collection",
+      "probability": 0.12,
+      "expected_wear": 0.2696
+    }
+  ],
+  "collections": [
+    "The Genesis Collection",
+    "The Spy Tech Collection",
+    "The Arabesque Collection"
+  ],
+  "hero_output": {
+    "name": "P250 | Lotus Imprint (Field-Tested)",
+    "cn": "P250 | 莲花印 (久经沙场)",
+    "collection": "The Arabesque Collection",
+    "probability": 0.09999999999999999,
+    "expected_wear": 0.2696
+  }
+}

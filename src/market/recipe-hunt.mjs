@@ -6,6 +6,7 @@ import { steamListingUrl } from './inspect.mjs';
 import { samplePages } from './page-sampling.mjs';
 import { loadCookies } from '../auth/session.mjs';
 import { feasibleCandidates } from './combination-search.mjs';
+import { cheapestCombination } from '../tradeup/cheapest.mjs';
 import {
   f32, ieee754Info, normalizeWear, outputWear, outputTargetInfo,
   requiredAvgNormalized, solveCombinations,
@@ -204,10 +205,13 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
   let feasible = { pool, reachable: false, shortage: true };
   let bestFit = null;
   let lastFitSize = -1;
+  let lastFitAt = -Infinity;
   const targetInfo = outputTargetInfo(targetWear, plan.totalCount, ...outRange);
   const fitCurrentPool = () => {
+    if (pool.length === lastFitSize || performance.now() - lastFitAt < 250) return;
+    lastFitAt = performance.now();
     feasible = feasibleCandidates(pool, quotas, targetSum, outRange, plan.totalCount);
-    if (feasible.shortage || pool.length === lastFitSize) return;
+    if (feasible.shortage) return;
     lastFitSize = pool.length;
     const candidates = (feasible.reachable && feasible.pool.length >= plan.totalCount ? feasible.pool : pool).slice().sort(comparePrices);
     const seed = bestFit?.materials.map(m => candidates.findIndex(c => listingKey(c) === listingKey(m)));
@@ -218,7 +222,7 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
       tries: 100, maxResults: 1, timeBudgetMs: Math.min(150, timeBudgetMs),
     });
     const result = solved.results[0];
-    if (!result || (bestFit && result.score >= bestFit.score)) return;
+    if (!result || (bestFit && result.score > bestFit.score)) return;
     bestFit = { score: result.score, materials: result.indices.map(i => candidates[i]) };
     onProgress(`增量拟合：候选 ${pool.length} 笔，当前最优产物误差 ${result.score.toExponential(3)}${result.score === 0 ? '，已精确命中' : ''}。`);
   };
@@ -411,41 +415,36 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
   onProgress(`保留全部 ${pool.length} 笔真实材料：先选最近磨损组合，再用单件替换与两件补偿降低整组产物误差。`);
   pool.sort(comparePrices);
   onWork({ type: 'solver' });
-  const startedSolving = Date.now();
-  const exactCandidates = new Set(feasible.pool);
-  const exactPool = feasible.reachable && feasible.pruned > 0 && feasible.pool.length >= plan.totalCount
-    ? pool.filter(m => exactCandidates.has(m)) : pool;
-  const solvePool = (candidates, budget, seedMaterials) => {
-    const indicesInPool = new Map(pool.map((m, i) => [m, i]));
-    const seed = seedMaterials?.map(m => candidates.indexOf(m));
-    const result = solveCombinations(candidates.map(m => m.norm), {
-      count: plan.totalCount, outMin: outRange[0], outMax: outRange[1], targetOut: targetWear,
-      candidateGroups: candidates.map(m => m.recipeGroupId), groupCounts: quotas,
-      seedIndices: seed?.every(i => i >= 0) ? seed : null,
-      tries: 30000, maxResults: wants, timeBudgetMs: budget,
-    });
-    return result.results.map(r => ({ ...r, indices: r.indices.map(i => indicesInPool.get(candidates[i])).sort((a, b) => a - b) }));
+  const startedSolving = performance.now();
+  const currencies = new Set(pool.map(currencyOf));
+  const comparable = currencies.size === 1 && !currencies.has(null) && pool.every(m => Number.isFinite(m.price));
+  const seed = bestFit?.materials.map(m => pool.findIndex(c => listingKey(c) === listingKey(m)));
+  const optimizerConfig = {
+    count: plan.totalCount, outMin: outRange[0], outMax: outRange[1], targetOut: targetWear,
+    candidateGroups: pool.map(m => m.recipeGroupId), groupCounts: quotas,
+    prices: comparable ? pool.map(m => m.price) : null, maxResults: wants,
   };
-  let results = solvePool(exactPool, exactPool === pool ? timeBudgetMs : timeBudgetMs * 0.7, bestFit?.materials);
-  if (exactPool !== pool && (!results.length || results[0].score > targetInfo.minimumScore)) {
-    onProgress('精确拟合尚未命中，放回全部材料继续单件替换与两件补偿，保留当前最接近组合。');
-    const remaining = Math.max(0, timeBudgetMs - (Date.now() - startedSolving));
-    results.push(...solvePool(pool, remaining, results[0]?.indices.map(i => pool[i]) || bestFit?.materials));
-  }
-  const uniqueResults = new Map();
-  for (const r of results) uniqueResults.set(r.indices.join(','), r);
-  const rankedResults = [...uniqueResults.values()].sort((a, b) => a.score - b.score);
+  const quick = cheapestCombination(pool.map(m => m.norm), { ...optimizerConfig, timeBudgetMs: 0,
+    initialResults: seed?.every(i => i >= 0) ? [{ indices: seed }] : [] });
+  const heuristic = quick.optimization.proven ? quick : solveCombinations(pool.map(m => m.norm), {
+      count: plan.totalCount, outMin: outRange[0], outMax: outRange[1], targetOut: targetWear,
+      candidateGroups: pool.map(m => m.recipeGroupId), groupCounts: quotas,
+      seedIndices: quick.results[0]?.indices,
+      tries: 30000, maxResults: wants, timeBudgetMs: timeBudgetMs * 0.3,
+  });
+  onProgress('正在验证最低价：按固定配额搜索，以磨损误差优先、同误差价格最低为目标。');
+  const optimized = quick.optimization.proven ? quick : cheapestCombination(pool.map(m => m.norm), {
+    ...optimizerConfig, initialResults: [...quick.results, ...heuristic.results],
+    timeBudgetMs: Math.max(0, timeBudgetMs - (performance.now() - startedSolving)),
+  });
+  const optimization = { ...optimized.optimization, currencyId: comparable ? [...currencies][0] : null,
+    scanComplete: !steamRandomPages && perItem.every(m => !m.errors.length) };
+  onProgress(optimization.proven ? '已证明：本次已抓候选中，同等最小磨损误差下总价最低。'
+    : optimization.comparable ? '已返回当前最低价组合；验证预算用完，尚未证明最低价。' : '存在不同币种或未知价格，未进行统一最低价证明。');
+  const rankedResults = optimized.results;
   const solved = { results: rankedResults.filter(r => r.score === rankedResults[0]?.score).slice(0, wants) };
   const recipes = solved.results.map(result => {
     const picks = result.indices.map(i => pool[i]);
-    // 相同枪皮和实际 float32 磨损可换为更便宜的未使用挂单，产物磨损保持不变。
-    const occupied = new Set(picks.map(assetKey));
-    for (let i = 0; i < picks.length; i++) {
-      const pick = picks[i];
-      const cheaper = pool.find(m => m.recipeMaterialId === pick.recipeMaterialId &&
-        f32(m.paintwear) === f32(pick.paintwear) && cheaperThan(m, pick) && !occupied.has(assetKey(m)));
-      if (cheaper) { occupied.delete(assetKey(pick)); occupied.add(assetKey(cheaper)); picks[i] = cheaper; }
-    }
     if (new Set(picks.map(assetKey)).size !== plan.totalCount ||
         quotaSpecs.some(m => picks.filter(p => p.recipeGroupId === m.id).length !== m.count)) {
       throw new Error('求解结果不符合链接的材料数量约束，已停止输出。');
@@ -470,7 +469,7 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
   }).sort((a, b) => a.score - b.score || (a.cost ?? Infinity) - (b.cost ?? Infinity));
   if (!recipes.length) return { ok: false, error: 'no_recipe_solution', message: '在指定材料数量和搜索范围内未找到可用组合。', resume: resumeInfo() };
   return {
-    ok: true, exteriors, dataSource, collectionName: plan.collection, materialGrade: plan.grade,
+    ok: true, exteriors, dataSource, optimization, collectionName: plan.collection, materialGrade: plan.grade,
     outRange, targetOutput: plan.targetOutput.name, targetOutputIndex: plan.targetOutputIndex ?? 0,
     targetOutputProbability: plan.targetOutput.probability, materialCount: materialBands.length,
     reachableRange: feasible.range,

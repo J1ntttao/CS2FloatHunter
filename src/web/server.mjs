@@ -27,6 +27,7 @@ import { prepareLoginInputs, verifyBuffSession } from '../auth/login-input.mjs';
 import { marketAccess, normalizeMarket } from '../market/access.mjs';
 import { SearchTasks } from './search-tasks.mjs';
 import { SearchEta } from './search-eta.mjs';
+import { SearchResults } from './search-results.mjs';
 import { normalizeExteriors } from '../market/exteriors.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
@@ -36,6 +37,7 @@ const HOST = '127.0.0.1';
 
 const tasks = new SearchTasks();
 const huntCheckpoints = new Map();
+const searchResults = new SearchResults(process.env.CS2_SEARCH_RESULTS_DIR || path.join(DATA_DIR, 'search-results'));
 const HUNT_TIMEOUT_MS = 15 * 60 * 1000;
 const HUNT_SOLVER_BUDGET_MS = 40 * 1000;
 
@@ -368,7 +370,7 @@ async function handleHunt(req, res, url) {
       send('progress', { message: `数据来源：${r.dataSource === 'both' ? 'BUFF + Steam（两边均搜索真实挂单磨损）' : r.dataSource === 'steam' ? 'Steam（挂单与磨损均来自 Steam）' : 'BUFF'}` });
 
       task.check();
-      send('result', {
+      const resultPayload = {
         market,
         // 顶层标明这批结果的数据来源，避免用户误以为「仅 Steam」出来的数字是 Steam 的
         dataSource: r.dataSource || 'buff',
@@ -400,12 +402,21 @@ async function handleHunt(req, res, url) {
         targetOutputProbability: r.targetOutputProbability,
         exactFound: r.exactFound,
         bestScore: r.bestScore,
+        optimization: r.optimization,
         reachableRange: r.reachableRange,
         ieee754: r.ieee754,
         targetWear,
         recipes: r.recipes,
         resume: r.resume || { id: checkpoint.id, canContinue: false, pending: [] },
-      });
+      };
+      try {
+        resultPayload.saved = await searchResults.save(resultPayload, {
+          link, targetWear, exteriors, randomPages, market, statTrak, outputIndex,
+        });
+      } catch (e) {
+        resultPayload.saveError = `结果保存失败：${e.message}`;
+      }
+      send('result', resultPayload);
       sendResume(r.resume);
       eta.update({ type: 'done' });
       send('done', { elapsedMs: Date.now() - t0 });
@@ -434,6 +445,18 @@ const server = http.createServer(async (req, res) => {
   let url;
   try { url = new URL(req.url, `http://${req.headers.host || HOST}`); }
   catch { return json(res, 400, { ok: false, error: 'bad url' }); }
+
+  if (url.pathname === '/api/search-results' || url.pathname.startsWith('/api/search-results/')) {
+    if (req.method !== 'GET') return json(res, 405, { ok: false, message: '仅支持 GET' });
+    try {
+      if (url.pathname === '/api/search-results') return json(res, 200, { ok: true, items: await searchResults.list() });
+      const id = url.pathname.slice('/api/search-results/'.length);
+      const item = await searchResults.get(id);
+      if (!item) return json(res, 404, { ok: false, message: '搜索记录不存在' });
+      if (url.searchParams.get('download') === '1') res.setHeader('content-disposition', `attachment; filename="search-${id}.json"`);
+      return json(res, 200, item);
+    } catch { return json(res, 500, { ok: false, message: '读取搜索记录失败' }); }
+  }
 
   if (url.pathname === '/api/recipe') {
     const controller = new AbortController();

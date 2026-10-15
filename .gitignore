@@ -4,6 +4,7 @@ data/*credentials*.json
 
 # 运行产物
 data/last-pool.json
+data/search-results/
 out/
 
 node_modules/

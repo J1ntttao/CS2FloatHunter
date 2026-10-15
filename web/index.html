@@ -322,6 +322,10 @@
 
   <div id="locBox"></div>
   <div id="resultBox"></div>
+  <section class="card">
+    <button id="loadHistory" class="ghost">查看已保存的搜索结果</button>
+    <div id="searchHistory" class="note" style="margin-top:12px" aria-live="polite"></div>
+  </section>
 </main>
 
 <div class="overlay" id="buyOverlay" onclick="if(event.target===this)closeBuyPanel()">
@@ -498,6 +502,11 @@ function renderResult(d) {
   $('resultBox').innerHTML = `
     <span class="sect-label" id="summary">搜索概要</span>
     <section class="card">
+      ${d.optimization ? `<div class="msg ${d.optimization.proven ? 'good' : 'warn'}">${d.optimization.proven
+        ? '已证明已抓候选中：先取最小磨损误差，再取最低总价。'
+        : d.optimization.comparable ? '当前最优组合；尚未证明最低价。' : '存在不同币种或未知价格，无法证明统一最低价。'}${d.randomPages ? ' 本次为随机抽页，未覆盖全部挂单。' : d.resume?.canContinue ? ' 仍有档位尚未抓取完成。' : ' 结论仅适用于本次抓到的挂单。'}</div>` : ''}
+      ${d.saved ? `<div class="note">已保存 · ${esc(new Date(d.saved.savedAt).toLocaleString())} · <a class="link" href="/api/search-results/${encodeURIComponent(d.saved.id)}?download=1">导出 JSON</a> · 历史挂单价格与库存以购买时为准。</div>` : ''}
+      ${d.saveError ? `<div class="msg warn">${esc(d.saveError)}</div>` : ''}
       ${ieBox}
       ${!d.exactFound ? `<div class="msg warn">未精确命中，以下为本次候选中找到的近似组合。实际产物磨损 ${wearFmt(d.recipes[0]?.outputWear)}，目标 ${wearFmt(d.targetWear)}，误差 ${Number(d.bestScore).toExponential(3)}。</div>` : ''}
       ${d.dataSourceNote ? `<div class="msg ${d.dataSource === 'steam' ? 'good' : 'warn'}">${esc(d.dataSourceNote)}</div>` : ''}
@@ -521,6 +530,34 @@ function renderResult(d) {
       ${d.recipes.map(recipeCard).join('') || '<div class="note" style="padding:24px">没有找到可用组合。</div>'}
     </section>`;
 }
+
+async function loadSearchHistory() {
+  const box = $('searchHistory');
+  box.textContent = '正在读取…';
+  try {
+    const response = await fetch('/api/search-results');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || '读取失败');
+    box.innerHTML = data.items.length ? data.items.map(item => `<div style="margin:8px 0">
+      <button class="ghost" data-result-id="${esc(item.id)}">${esc(item.targetOutput)} · ${wearFmt(item.targetWear)} · ${esc(new Date(item.savedAt).toLocaleString())}</button>
+      ${(item.costByCurrency || []).map(c => money(c.total, c.currencyId)).join(' + ')}
+      · ${item.optimization?.proven ? '已证明候选最低价' : '最低价未验证'}
+      <a class="link" href="/api/search-results/${encodeURIComponent(item.id)}?download=1">导出 JSON</a>
+    </div>`).join('') : '暂无已保存的搜索结果。';
+  } catch (e) { box.textContent = e.message; }
+}
+$('loadHistory').onclick = loadSearchHistory;
+$('searchHistory').onclick = async event => {
+  const id = event.target.closest('[data-result-id]')?.dataset.resultId;
+  if (!id) return;
+  try {
+    const response = await fetch('/api/search-results/' + encodeURIComponent(id));
+    const record = await response.json();
+    if (!response.ok) throw new Error(record.message || '读取失败');
+    renderResult({ ...record.result, saved: { id: record.id, savedAt: record.savedAt } });
+    $('resultBox').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) { $('searchHistory').textContent = e.message; }
+};
 
 let qualitySid = null, qualityOverrideSid = null, qualityInputCurrent = null;
 let qualityVersion = 0, qualityController = null, qualityTimer = null;

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import http from 'node:http';
 import { once } from 'node:events';
 import { spawn } from 'node:child_process';
@@ -354,6 +356,7 @@ await once(probe, 'listening');
 const port = probe.address().port;
 await new Promise(resolve => probe.close(resolve));
 const root = new URL('../', import.meta.url);
+const resultsDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'cs2-hunt-results-'));
 const child = spawn(process.execPath, ['--input-type=module', '-e', `
   import fs from 'node:fs';
   let retryScenario = false, timeoutOnce = true, retryRecipeReads = 0;
@@ -432,7 +435,7 @@ const child = spawn(process.execPath, ['--input-type=module', '-e', `
       assetId:'buff:'+s.key+i,paintwear:wear,price:1,buyUrl:'https://buff.163.com/goods/'+encodeURIComponent(goodsId)}))};
   };
   await import(${JSON.stringify(new URL('src/web/server.mjs', root).href)});
-`], { env: { ...process.env, CS2_WEB_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+`], { env: { ...process.env, CS2_WEB_PORT: String(port), CS2_SEARCH_RESULTS_DIR: resultsDirectory }, stdio: ['ignore', 'pipe', 'pipe'] });
 let childOutput = '';
 const ready = new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(new Error('Web 测试启动超时：' + childOutput)), 10000);
@@ -460,6 +463,20 @@ try {
   assert.equal(result.materialBands.length, 0);
   assert.deepEqual(result.collectionSpecs.map(m => m.count), [9, 1]);
   console.log('✓ 真实 Web SSE 端点传递收藏品比例与同等级候选，并使用替代枪皮产出正确结果');
+  assert.equal(typeof result.optimization.proven, 'boolean');
+  assert.equal(result.optimization.scope, 'fetched_candidates');
+  assert.ok(result.saved?.id);
+  const savedResponse = await fetch(`http://127.0.0.1:${port}/api/search-results/${result.saved.id}?download=1`);
+  assert.match(savedResponse.headers.get('content-disposition'), /attachment; filename="search-/);
+  const savedRecord = await savedResponse.json();
+  assert.deepEqual(savedRecord.result.recipes, result.recipes);
+  assert.deepEqual(savedRecord.result.optimization, result.optimization);
+  assert.equal(savedRecord.request.link, '099784dbf1e1240d');
+  assert.ok(!JSON.stringify(savedRecord.request).includes('offline-test-session'));
+  const history = await (await fetch(`http://127.0.0.1:${port}/api/search-results`)).json();
+  assert.equal(history.items[0].id, result.saved.id);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/search-results/invalid`)).status, 404);
+  console.log('✓ 真实搜索自动保存并透传最优性，历史列表、结果读取和 JSON 下载内容一致');
   const wideStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&exteriors=fn,mw,ft,ww,bs&market=steam`)).text();
   assert.ok(!wideStream.includes('event: error'), wideStream);
   assert.match(wideStream, /搜索已勾选档位的完整区间/);
@@ -522,4 +539,5 @@ try {
 } finally {
   child.kill();
   if (child.exitCode === null && child.signalCode === null) await once(child, 'exit');
+  fs.rmSync(resultsDirectory, { recursive: true, force: true });
 }

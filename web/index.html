@@ -231,26 +231,38 @@
 <main>
   <header class="top">
     <h1>CS2 磨损猎人</h1>
-    <div class="lead">贴配方链接定收藏品，填目标产物磨损，自动搜出能打出这个磨损的 10 把材料。</div>
+    <div class="lead">选收藏品和目标产物，填目标磨损，搜索同收藏品的 10 把材料。</div>
   </header>
 
   <section class="card" id="search">
     <h2>搜索条件</h2>
+    <label for="sourceMode">选择方式</label>
+    <select id="sourceMode"><option value="catalog">收藏品 / 箱子（BUFF）</option><option value="link">CS2UP 分享链接</option></select>
+    <div id="catalogFields" style="margin-top:16px">
+      <label for="collectionSelect">收藏品 / 箱子</label>
+      <select id="collectionSelect" disabled><option value="">正在读取 BUFF 目录…</option></select>
+      <label for="outputGrade">产物稀有度</label>
+      <select id="outputGrade" disabled><option value="">先选择收藏品</option></select>
+      <div class="note" id="catalogNote">固定投入同收藏品、低一等级的 10 把材料。资料来自 BUFF。</div>
+      <button type="button" class="ghost" id="refreshCatalog" style="margin-top:10px">刷新 BUFF 资料</button>
+    </div>
+    <div id="linkFields" hidden style="margin-top:16px">
     <label for="link">CS2UP 配方分享链接</label>
     <input type="text" id="link" placeholder="https://cs2up.cn/" value="https://cs2up.cn/">
     <div class="note">保留链接中每个收藏品的投入数量，允许替换为同收藏品、同等级的其它枪皮；材料磨损根据你输入的目标产物磨损重新计算。也可只贴 <code>sid</code>。</div>
+    </div>
     <label class="check"><input type="checkbox" id="stattrak"> 暗金（StatTrak™）</label>
-    <div class="note" id="qualityNote">读取链接后自动跟随配方品质，可手动切换。</div>
+    <div class="note" id="qualityNote">按所选品质读取 BUFF 产物和材料。</div>
 
     <div class="grid2 search-params" style="margin-top:18px">
       <div>
         <label for="wear">目标产物磨损</label>
-        <input type="number" id="wear" value="0.20001016" step="0.0000001" min="0.000001" max="0.999999">
+        <input type="number" id="wear" value="0.20011016" step="0.0000001" min="0.000001" max="0.999999">
       </div>
       <div>
         <label for="targetOutput">目标产物（按概率）</label>
         <select id="targetOutput" disabled><option value="">读取链接后选择</option></select>
-        <div class="note">目标磨损会按所选产物的完整区间计算。</div>
+        <div class="note" id="sameWearNote">目标磨损按所选产物的完整区间计算。</div>
       </div>
       <div>
         <label for="interval">请求间隔 (ms)</label>
@@ -362,13 +374,27 @@ function renderTargetOutputs(outputs, { statTrak = $('stattrak')?.checked, selec
   recipeOutputs = Array.isArray(outputs) ? outputs : [];
   const select = $('targetOutput');
   if (!select) return;
-  const index = Number.isInteger(Number(selected)) && Number(selected) >= 0 && Number(selected) < recipeOutputs.length ? Number(selected) : 0;
+  const index = Number.isInteger(Number(selected)) && Number(selected) >= 0 && Number(selected) < recipeOutputs.length && !recipeOutputs[Number(selected)].unavailableReason
+    ? Number(selected) : recipeOutputs.findIndex(output => !output.unavailableReason);
   selectedOutputIndex = index;
   select.innerHTML = recipeOutputs.length
-    ? recipeOutputs.map((output, i) => `<option value="${i}">${esc(outputNameForQuality(output.name, statTrak))} · ${outputProbabilityLabel(output.probability)}</option>`).join('')
-    : '<option value="">读取链接后选择</option>';
+    ? recipeOutputs.map((output, i) => `<option value="${i}"${output.unavailableReason ? ' disabled' : ''}>${esc(outputNameForQuality(output.name, statTrak))} · ${outputProbabilityLabel(output.probability)}${output.range ? ` · [${output.range.join(', ')}]` : ''}${output.unavailableReason ? ' · 暂缺完整磨损区间' : ''}</option>`).join('')
+    : '<option value="">读取产物后选择</option>';
   select.value = recipeOutputs.length ? String(index) : '';
-  select.disabled = !recipeOutputs.length;
+  select.disabled = index < 0;
+  if (typeof renderSameWear === 'function') renderSameWear();
+}
+
+function renderSameWear() {
+  const el = $('sameWearNote');
+  if (!el) return;
+  const target = recipeOutputs[selectedOutputIndex];
+  if (!target?.range) { el.textContent = '目标磨损按所选产物的完整区间计算。'; return; }
+  const same = recipeOutputs.filter((output, index) => index !== selectedOutputIndex && output.range &&
+    output.range.every((value, i) => Math.fround(value) === Math.fround(target.range[i])));
+  el.textContent = `完整磨损区间 [${target.range.join(', ')}]。` + (same.length
+    ? `同一组材料下，以下产物与目标的最终磨损相同：${same.map(o => outputNameForQuality(o.name, $('stattrak').checked)).join('、')}。`
+    : '其他产物的完整区间不同，最终磨损分别计算。');
 }
 
 function statusLine(text, cls = '') {
@@ -481,7 +507,7 @@ function recipeCard(r, idx) {
     </div>
     ${saved}
     ${fromBoth ? '<div class="order">较便宜的价格加粗。产物磨损和购买清单按“已选入炉”挂单计算；其它磨损挂单为参考，替换后需要重新计算。</div>' : ''}
-    ${r.outputs?.length ? `<div class="order">可能产物：${r.outputs.map(o => `${esc(o.name)} · 磨损 ${wearFmt(o.wear)}${Number.isFinite(o.probability) ? ` · ${(o.probability * 100).toFixed(2)}%` : ''}`).join('<br>')}</div>` : ''}
+    ${r.outputs?.length ? `<div class="order">可能产物：${r.outputs.map(o => `${esc(o.name)} · 磨损 ${wearFmt(o.wear)}${Number.isFinite(o.probability) ? ` · ${(o.probability * 100).toFixed(2)}%` : ''}${o.wear != null && o.wear === r.outputWear ? ' · 与目标产物磨损相同' : ''}`).join('<br>')}</div>` : ''}
     <div class="scroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
     <div class="order">入炉顺序 ${r.materials.map((_, k) => `<b>${k + 1}</b>`).join(' → ')}</div>
   </div>`;
@@ -561,12 +587,89 @@ $('searchHistory').onclick = async event => {
 
 let qualitySid = null, qualityOverrideSid = null, qualityInputCurrent = null;
 let qualityVersion = 0, qualityController = null, qualityTimer = null;
+let recipeLoadState = 'idle', recipeLoadError = '';
+let catalogPlanId = null, catalogVersion = 0, catalogController = null, catalogState = 'idle';
+function isCatalogMode() { return $('sourceMode')?.value === 'catalog'; }
+async function catalogGet(path, params, signal) {
+  const data = await (await fetch(path + '?' + new URLSearchParams(params), { signal })).json();
+  if (!data.ok) throw new Error(data.message || 'BUFF 资料读取失败');
+  return data;
+}
+function resetCatalogSelection() {
+  catalogController?.abort(); ++catalogVersion;
+  catalogPlanId = null; catalogState = 'idle';
+  renderTargetOutputs([], { selected: 0 }); invalidateResume();
+}
+async function loadCatalogDirectory(refresh = false) {
+  resetCatalogSelection();
+  const version = catalogVersion;
+  const select = $('collectionSelect'); select.disabled = true;
+  $('outputGrade').disabled = true;
+  $('catalogNote').textContent = '正在读取 BUFF 收藏品目录…';
+  try {
+    const controller = catalogController = new AbortController();
+    const data = await catalogGet('/api/catalog/collections', { refresh: refresh ? '1' : '0' }, controller.signal);
+    if (version !== catalogVersion || !isCatalogMode()) return;
+    const categories = [...new Set(data.items.map(i => i.category))];
+    select.innerHTML = '<option value="">选择收藏品 / 箱子</option>' + categories.map(category =>
+      `<optgroup label="${esc(category)}">${data.items.filter(i => i.category === category).map(i => `<option value="${esc(i.id)}">${esc(i.name)}</option>`).join('')}</optgroup>`).join('');
+    select.value = ''; select.disabled = false;
+    $('catalogNote').textContent = '资料来自 BUFF。选择收藏品后读取可用产物等级；固定投入 10 把同收藏品材料。';
+  } catch (e) { if (version === catalogVersion) { catalogState = 'error'; $('catalogNote').textContent = e.message + ' 点击刷新 BUFF 资料重试。'; } }
+}
+async function loadCatalogCollection(refresh = false) {
+  resetCatalogSelection();
+  const version = catalogVersion, id = $('collectionSelect').value;
+  const select = $('outputGrade'); select.disabled = true;
+  select.innerHTML = '<option value="">正在读取产物等级…</option>';
+  if (!id) { $('catalogNote').textContent = '请选择收藏品 / 箱子。'; return; }
+  catalogState = 'loading';
+  $('catalogNote').textContent = '正在从 BUFF 读取商品与稀有度…';
+  try {
+    const controller = catalogController = new AbortController();
+    const data = await catalogGet('/api/catalog/collection', { collection: id, stattrak: $('stattrak').checked ? '1' : '0', refresh: refresh ? '1' : '0' }, controller.signal);
+    if (version !== catalogVersion || !isCatalogMode()) return;
+    select.innerHTML = data.grades.map(g => `<option value="${esc(g.key)}">${esc(g.label)}</option>`).join('');
+    if (!data.grades.length) { catalogState = 'error'; $('catalogNote').textContent = '该收藏品与品质下暂无可用的十合一产物。'; return; }
+    select.value = data.grades.find(g => g.key === 'restricted')?.key || data.grades[0].key;
+    select.disabled = false;
+    await loadCatalogPlan(refresh);
+  } catch (e) { if (version === catalogVersion) { catalogState = 'error'; $('catalogNote').textContent = e.message; } }
+}
+async function loadCatalogPlan(refresh = false) {
+  resetCatalogSelection();
+  const version = catalogVersion;
+  if (!$('collectionSelect').value || !$('outputGrade').value) return;
+  catalogState = 'loading';
+  $('catalogNote').textContent = '正在核验 BUFF 产物和材料的完整磨损区间，首次读取可能需要几分钟；已确认资料会缓存。';
+  try {
+    const controller = catalogController = new AbortController();
+    const data = await catalogGet('/api/catalog/plan', { collection: $('collectionSelect').value, grade: $('outputGrade').value,
+      stattrak: $('stattrak').checked ? '1' : '0', refresh: refresh ? '1' : '0' }, controller.signal);
+    if (version !== catalogVersion || !isCatalogMode()) return;
+    catalogState = 'ready'; catalogPlanId = data.planId;
+    renderTargetOutputs(data.outputs, { selected: 0 });
+    $('catalogNote').textContent = `${data.collection} · 投入 ${data.materialGrade} 10 把，可选 ${data.materialCount} 种材料。产物与完整区间来自 BUFF，已缓存。`;
+  } catch (e) { if (version === catalogVersion) { catalogState = 'error'; $('catalogNote').textContent = e.message + ' 点击刷新 BUFF 资料重试。'; } }
+}
+$('sourceMode')?.addEventListener('change', () => {
+  qualityController?.abort(); clearTimeout(qualityTimer); ++qualityVersion;
+  resetCatalogSelection();
+  $('catalogFields').hidden = !isCatalogMode(); $('linkFields').hidden = isCatalogMode();
+  $('qualityNote').textContent = isCatalogMode() ? '按所选品质读取 BUFF 产物和材料。' : '读取链接后自动跟随配方品质，可手动切换。';
+  if (isCatalogMode()) loadCatalogDirectory();
+  else { qualityInputCurrent = null; qualitySid = null; qualityInputChanged(); }
+});
+$('collectionSelect')?.addEventListener('change', () => loadCatalogCollection());
+$('outputGrade')?.addEventListener('change', () => loadCatalogPlan());
+$('refreshCatalog')?.addEventListener('click', () => $('collectionSelect').value ? loadCatalogCollection(true) : loadCatalogDirectory(true));
 function qualityInputSid() {
   const text = $('link').value.trim();
   return /^[0-9a-f]{16}$/i.test(text) ? text.toLowerCase() : text.match(/sid[=/]([0-9a-f]{8,64})/i)?.[1].toLowerCase() || null;
 }
 async function loadRecipeQuality(sid, version) {
   if (!sid) return;
+  recipeLoadState = 'loading'; recipeLoadError = '';
   const controller = new AbortController();
   qualityController = controller;
   try {
@@ -574,6 +677,7 @@ async function loadRecipeQuality(sid, version) {
     const data = await response.json();
     if (version !== qualityVersion || sid !== qualityInputSid()) return;
     if (!data.ok) throw new Error(data.message || '配方读取失败');
+    recipeLoadState = 'ready';
     qualitySid = sid;
     if (typeof renderTargetOutputs === 'function') renderTargetOutputs(data.outputs || [], {
       statTrak: qualityOverrideSid === sid ? $('stattrak').checked : data.statTrak, selected: 0,
@@ -583,14 +687,15 @@ async function loadRecipeQuality(sid, version) {
       $('qualityNote').textContent = `链接配方为${data.statTrak ? '暗金' : '普通'}，已自动设置；可手动切换。`;
     }
   } catch (e) {
-    if (!controller.signal.aborted && version === qualityVersion && qualityOverrideSid !== sid) {
-      $('qualityNote').textContent = '暂未读取到配方品质；开始搜索时将按链接默认品质，也可手动选择。';
+    if (!controller.signal.aborted && version === qualityVersion && sid === qualityInputSid()) {
+      recipeLoadState = 'error'; recipeLoadError = e.message;
+      $('qualityNote').textContent = `配方读取失败：${e.message}。点击开始搜索可重试读取。`;
     }
   }
 }
 function qualityInputChanged() {
   const sid = qualityInputSid();
-  if (sid === qualityInputCurrent && (qualitySid === sid || qualityOverrideSid === sid)) return;
+  if (sid === qualityInputCurrent && qualitySid === sid) return;
   if (sid !== qualityInputCurrent) {
     qualityInputCurrent = sid; qualitySid = null; qualityOverrideSid = null;
     $('stattrak').checked = false;
@@ -600,7 +705,8 @@ function qualityInputChanged() {
   qualityController?.abort();
   clearTimeout(qualityTimer);
   const version = ++qualityVersion;
-  $('qualityNote').textContent = sid ? '正在读取链接的暗金品质 ...' : '请输入有效分享链接或 sid，读取后自动跟随配方品质。';
+  recipeLoadState = sid ? 'loading' : 'idle'; recipeLoadError = '';
+  $('qualityNote').textContent = sid ? '正在读取链接的配方品质和产物 ...' : '请输入有效分享链接或 sid，读取后自动跟随配方品质。';
   qualityTimer = setTimeout(() => loadRecipeQuality(sid, version), 400);
 }
 $('link').addEventListener('input', qualityInputChanged);
@@ -614,6 +720,7 @@ function invalidateResume() {
 
 $('stattrak').addEventListener('change', () => {
   invalidateResume();
+  if (isCatalogMode()) { $('qualityNote').textContent = `已选择${$('stattrak').checked ? '暗金' : '普通'}品质。`; loadCatalogCollection(); return; }
   qualityOverrideSid = qualityInputSid();
   if (typeof renderTargetOutputs === 'function') renderTargetOutputs(recipeOutputs, { statTrak: $('stattrak').checked, selected: selectedOutputIndex });
   $('qualityNote').textContent = `已手动选择${$('stattrak').checked ? '暗金' : '普通'}搜索；更换配方后重新跟随链接。`;
@@ -621,6 +728,7 @@ $('stattrak').addEventListener('change', () => {
 
 $('targetOutput')?.addEventListener?.('change', () => {
   selectedOutputIndex = Number($('targetOutput').value);
+  if (typeof renderSameWear === 'function') renderSameWear();
   invalidateResume();
 });
 
@@ -796,13 +904,32 @@ $('go').onclick = () => startSearch();
 function startSearch({ resume = false } = {}) {
   const link = $('link').value.trim();
   const w = $('wear').value.trim();
-  if (!link) { statusLine('请填写 CS2UP 配方分享链接', 'bad'); return; }
-  if (!resume && typeof recipeOutputs !== 'undefined' && !recipeOutputs.length) { statusLine('正在读取配方产物，请稍候再开始搜索', 'bad'); return; }
+  const direct = typeof isCatalogMode === 'function' && isCatalogMode();
+  if (!direct && !link) { statusLine('请填写 CS2UP 配方分享链接', 'bad'); return; }
+  if (!resume && direct && (catalogState !== 'ready' || !catalogPlanId)) {
+    statusLine(catalogState === 'loading' ? '正在读取 BUFF 资料，请稍候。' : '请先选择收藏品和产物等级；读取失败时可点击刷新 BUFF 资料。', 'bad'); return;
+  }
+  if (!resume && !direct && typeof recipeLoadState !== 'undefined') {
+    const sid = qualityInputSid();
+    if (!sid) { statusLine('请输入有效分享链接或 sid', 'bad'); return; }
+    if (sid !== qualityInputCurrent) qualityInputChanged();
+    if (recipeLoadState === 'error') {
+      statusLine('配方读取失败：' + recipeLoadError + '；正在重试读取，请稍候。', 'bad');
+      clearTimeout(qualityTimer);
+      loadRecipeQuality(sid, ++qualityVersion);
+      return;
+    }
+    if (recipeLoadState !== 'ready') { statusLine('正在读取配方产物，请稍候再开始搜索', 'act'); return; }
+  }
+  if (!resume && typeof recipeOutputs !== 'undefined' && !recipeOutputs.some(output => !output.unavailableReason)) {
+    statusLine('配方中暂无可用目标产物：缺少完整磨损区间，请更换链接。', 'bad'); return;
+  }
   if (!w || !(Number(w) > 0 && Number(w) < 1)) { statusLine('目标磨损需在 0 到 1 之间', 'bad'); return; }
   const selectedExteriors = resume ? activeSearchExteriors : exteriorKeys.filter(k => $('exterior_' + k).checked);
   if (!selectedExteriors?.length) { statusLine('请至少勾选一个搜索品质等级', 'bad'); return; }
   const options = resume ? activeSearchOptions : {
     randomPages: $('randomPages')?.value || '0', outputIndex: typeof selectedOutputIndex === 'number' ? selectedOutputIndex : 0,
+    planId: direct ? catalogPlanId : null,
   };
   if (!Number.isInteger(Number(options?.randomPages)) || Number(options.randomPages) < 0 || Number(options.randomPages) > 500) { statusLine('请填写有效的随机页数', 'bad'); return; }
   if (!resume) { activeSearchOptions = options; activeSearchExteriors = selectedExteriors; activeResumeId = null; reset(); }
@@ -821,10 +948,11 @@ function startSearch({ resume = false } = {}) {
     interval: $('interval').value, market: MARKET,
     insecure: $('insecure').checked ? '1' : '0',
   });
+  if (options.planId) { qs.delete('url'); qs.set('plan_id', options.planId); }
   const qualitySearchSid = qualityInputSid();
   const qualityParam = resume
     ? activeSearchQualityParam
-    : qualitySearchSid && (qualitySid === qualitySearchSid || qualityOverrideSid === qualitySearchSid)
+    : direct || qualitySearchSid && (qualitySid === qualitySearchSid || qualityOverrideSid === qualitySearchSid)
       ? ($('stattrak').checked ? '1' : '0')
       : null;
   if (qualityParam != null) qs.set('stattrak', qualityParam);
@@ -965,7 +1093,7 @@ function openNextUnvisited() {
 }
 
 refreshState();
-qualityInputChanged();
+if (isCatalogMode()) loadCatalogDirectory(); else qualityInputChanged();
 </script>
 </body>
 </html>

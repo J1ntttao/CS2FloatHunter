@@ -1,0 +1,125 @@
+{
+  "title": "变革武器箱 X 墨彩武器箱",
+  "subtitle": "普通",
+  "recipe_line": "1打9｜军规级→受限级",
+  "input_rarity_label": "军规级",
+  "output_rarity_label": "受限级",
+  "stattrak": false,
+  "collections": [
+    "The Revolution Collection",
+    "The Achroma Collection"
+  ],
+  "materials": [
+    {
+      "name": "SG 553 | Cyberforce (Minimal Wear)",
+      "cn": "SG 553 | 赛博之力 (略有磨损)",
+      "collection": "The Revolution Collection",
+      "wear": 0.088
+    },
+    {
+      "name": "P2000 | Grip Tape (Field-Tested)",
+      "cn": "P2000 | 防滑胶带 (久经沙场)",
+      "collection": "The Achroma Collection",
+      "wear": 0.204
+    },
+    {
+      "name": "P2000 | Grip Tape (Field-Tested)",
+      "cn": "P2000 | 防滑胶带 (久经沙场)",
+      "collection": "The Achroma Collection",
+      "wear": 0.204
+    },
+    {
+      "name": "P2000 | Grip Tape (Field-Tested)",
+      "cn": "P2000 | 防滑胶带 (久经沙场)",
+      "collection": "The Achroma Collection",
+      "wear": 0.204
+    },
+    {
+      "name": "P2000 | Grip Tape (Field-Tested)",
+      "cn": "P2000 | 防滑胶带 (久经沙场)",
+      "collection": "The Achroma Collection",
+      "wear": 0.204
+    },
+    {
+      "name": "P2000 | Grip Tape (Field-Tested)",
+      "cn": "P2000 | 防滑胶带 (久经沙场)",
+      "collection": "The Achroma Collection",
+      "wear": 0.204
+    },
+    {
+      "name": "AUG | Creep (Minimal Wear)",
+      "cn": "AUG | 蔓延 (略有磨损)",
+      "collection": "The Achroma Collection",
+      "wear": 0.108
+    },
+    {
+      "name": "AUG | Creep (Minimal Wear)",
+      "cn": "AUG | 蔓延 (略有磨损)",
+      "collection": "The Achroma Collection",
+      "wear": 0.108
+    },
+    {
+      "name": "AUG | Creep (Minimal Wear)",
+      "cn": "AUG | 蔓延 (略有磨损)",
+      "collection": "The Achroma Collection",
+      "wear": 0.108
+    },
+    {
+      "name": "AUG | Creep (Minimal Wear)",
+      "cn": "AUG | 蔓延 (略有磨损)",
+      "collection": "The Achroma Collection",
+      "wear": 0.108
+    }
+  ],
+  "outputs": [
+    {
+      "name": "AK-47 | Breakthrough (Minimal Wear)",
+      "cn": "AK-47 | 突破 (略有磨损)",
+      "collection": "The Achroma Collection",
+      "probability": 0.45,
+      "expected_wear": 0.14983333333333332
+    },
+    {
+      "name": "Glock-18 | Trace Lock (Minimal Wear)",
+      "cn": "格洛克18型 | 追踪锁定 (略有磨损)",
+      "collection": "The Achroma Collection",
+      "probability": 0.45,
+      "expected_wear": 0.1398444444444444
+    },
+    {
+      "name": "MAC-10 | Sakkaku (Field-Tested)",
+      "cn": "MAC-10 | 错觉 (久经沙场)",
+      "collection": "The Revolution Collection",
+      "probability": 0.020000000000000004,
+      "expected_wear": 0.3258711111111111
+    },
+    {
+      "name": "Glock-18 | Umbral Rabbit (Minimal Wear)",
+      "cn": "格洛克 18 型 | 圆影玉兔 (略有磨损)",
+      "collection": "The Revolution Collection",
+      "probability": 0.020000000000000004,
+      "expected_wear": 0.14983333333333332
+    },
+    {
+      "name": "M4A1-S | Emphorosaur-S (Field-Tested)",
+      "cn": "M4A1 消音型 | 隐伏帝王龙 (久经沙场)",
+      "collection": "The Revolution Collection",
+      "probability": 0.020000000000000004,
+      "expected_wear": 0.1598222222222222
+    },
+    {
+      "name": "P90 | Neoqueen (Minimal Wear)",
+      "cn": "P90 | 元女王 (略有磨损)",
+      "collection": "The Revolution Collection",
+      "probability": 0.020000000000000004,
+      "expected_wear": 0.11986666666666665
+    },
+    {
+      "name": "R8 Revolver | Banana Cannon (Field-Tested)",
+      "cn": "R8 左轮手枪 | 蕉农炮 (久经沙场)",
+      "collection": "The Revolution Collection",
+      "probability": 0.020000000000000004,
+      "expected_wear": 0.19977777777777775
+    }
+  ]
+}

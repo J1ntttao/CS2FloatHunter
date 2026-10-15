@@ -5,6 +5,7 @@ data/*credentials*.json
 # 运行产物
 data/last-pool.json
 data/search-results/
+data/buff-catalog/
 out/
 
 node_modules/

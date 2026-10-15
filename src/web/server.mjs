@@ -29,6 +29,7 @@ import { SearchTasks } from './search-tasks.mjs';
 import { SearchEta } from './search-eta.mjs';
 import { SearchResults } from './search-results.mjs';
 import { normalizeExteriors } from '../market/exteriors.mjs';
+import { BuffCatalog } from '../market/catalog.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -36,6 +37,8 @@ const PORT = Number(process.env.CS2_WEB_PORT || 8788);
 const HOST = '127.0.0.1';
 
 const tasks = new SearchTasks();
+const catalog = new BuffCatalog();
+const catalogPlans = new Map();
 const huntCheckpoints = new Map();
 const searchResults = new SearchResults(process.env.CS2_SEARCH_RESULTS_DIR || path.join(DATA_DIR, 'search-results'));
 const HUNT_TIMEOUT_MS = 15 * 60 * 1000;
@@ -200,6 +203,7 @@ async function handleResolve(req, res, url) {
  */
 async function handleHunt(req, res, url) {
   const link = url.searchParams.get('url') || '';
+  const catalogPlanId = url.searchParams.get('plan_id') || '';
   const wearRaw = url.searchParams.get('wear');
   const targetWear = Number(wearRaw);
   const exteriors = normalizeExteriors(url.searchParams.has('exteriors') ? url.searchParams.get('exteriors') : undefined);
@@ -217,7 +221,7 @@ async function handleHunt(req, res, url) {
   const resumeId = url.searchParams.get('resume_id') || '';
   const checkpointSignature = JSON.stringify({
     link, wear: wearRaw, exteriors, intervalMs, randomPages, market, quality: qualityParam || null,
-    outputIndex,
+    outputIndex, catalogPlanId,
   });
 
   sseHead(res);
@@ -272,20 +276,36 @@ async function handleHunt(req, res, url) {
         send('error', { message: '随机页数须为 0–500 的整数。', code: 'invalid_search_options' });
         discardCheckpoint(); return;
       }
-      send('stage', { stage: 'recipe', message: checkpoint.recipe ? '复用已读取的 CS2UP 配方，继续未完成搜索 ...' : '正在读取 CS2UP 配方中的材料种类与数量 ...' });
+      send('stage', { stage: 'recipe', message: catalogPlanId ? '读取已选择的 BUFF 收藏品与产物 ...'
+        : checkpoint.recipe ? '复用已读取的 CS2UP 配方，继续未完成搜索 ...' : '正在读取 CS2UP 配方中的材料种类与数量 ...' });
       sendResume({ id: checkpoint.id, canContinue: true, pending: [] });
-      const recipe = checkpoint.recipe || await fetchShareRecipe(link, { signal: task.signal });
+      const directPlan = catalogPlanId ? (checkpoint.catalogPlan || catalogPlans.get(catalogPlanId)) : null;
+      if (catalogPlanId && !directPlan) {
+        send('error', { message: '收藏品选择已失效，请重新加载产物后搜索。', code: 'catalog_plan_expired' });
+        discardCheckpoint(); return;
+      }
+      const recipe = directPlan ? { ...directPlan, title: directPlan.collection, recipeLine: '同收藏品 10 把材料',
+        sid: null } : checkpoint.recipe || await fetchShareRecipe(link, { signal: task.signal });
       task.check();
       if (!recipe.ok) { send('error', { message: recipe.message, code: recipe.error }); discardCheckpoint(); return; }
-      const located = locateCollection(recipe);
+      const located = directPlan || locateCollection(recipe, { allowUnresolvedOutputs: true });
       if (!located.ok) { send('error', { message: located.message, code: located.error }); discardCheckpoint(); return; }
       if (!Number.isInteger(outputIndex) || outputIndex < 0 || outputIndex >= located.outputSpecs.length) {
         send('error', { message: `目标产物选择无效：索引 ${outputIndexRaw ?? outputIndex} 超出配方产物范围。`, code: 'invalid_output_index' });
         discardCheckpoint(); return;
       }
+      if (!located.outputSpecs[outputIndex].range) {
+        send('error', { message: located.outputSpecs[outputIndex].unavailableReason, code: 'recipe_output_not_found' });
+        discardCheckpoint(); return;
+      }
       const statTrak = qualityParam === '1' ? true : qualityParam === '0' ? false : recipe.statTrak;
+      if (directPlan && statTrak !== directPlan.statTrak) {
+        send('error', { message: '品质已改变，请重新读取 BUFF 产物。', code: 'catalog_quality_changed' });
+        discardCheckpoint(); return;
+      }
       const loc = planWithQuality(located, statTrak, outputIndex);
       checkpoint.recipe = recipe;
+      if (directPlan) checkpoint.catalogPlan = directPlan;
 
       send('located', {
         sid: recipe.sid,
@@ -307,7 +327,7 @@ async function handleHunt(req, res, url) {
         },
         targetWear,
       });
-      send('stage', { stage: 'hunt', message: `搜索链接收藏品中的全部同等级枪皮，固定比例 ${loc.collectionSpecs.map(m => `${m.collection} × ${m.count}`).join('；')}，目标「${loc.targetOutput.name}」磨损 ${targetWear} ...` });
+      send('stage', { stage: 'hunt', message: `搜索所选收藏品中的全部同等级枪皮，固定比例 ${loc.collectionSpecs.map(m => `${m.collection} × ${m.count}`).join('；')}，目标「${loc.targetOutput.name}」磨损 ${targetWear} ...` });
 
       const hunter = new CollectionHunter({ intervalMs, verbose: false, signal: task.signal });
 
@@ -375,7 +395,7 @@ async function handleHunt(req, res, url) {
         // 顶层标明这批结果的数据来源，避免用户误以为「仅 Steam」出来的数字是 Steam 的
         dataSource: r.dataSource || 'buff',
         dataSourceNote: r.dataSource === 'steam'
-          ? '挂单、磨损与价格均来自 Steam 挂单页（价格为买家实付，含手续费）；搜索同收藏品、同等级枪皮，严格保持链接中的收藏品投入数量，完整磨损区间来自本地材料库'
+          ? `挂单、磨损与价格均来自 Steam 挂单页（价格为买家实付，含手续费）；严格保持收藏品投入数量，完整磨损区间来自${directPlan ? 'BUFF' : '本地材料库'}`
           : (market === 'both'
             ? 'BUFF 和 Steam 按相同磨损范围搜索真实挂单并合并求解；较便宜的价格加粗，产物磨损与总价按选中挂单计算。另一市场磨损不同的挂单仅作参考。'
             : '挂单与磨损均来自 BUFF'),
@@ -407,11 +427,14 @@ async function handleHunt(req, res, url) {
         ieee754: r.ieee754,
         targetWear,
         recipes: r.recipes,
+        selection: directPlan ? { source: 'buff', collectionId: directPlan.collectionId,
+          collection: directPlan.collection, outputGrade: directPlan.outputGrade } : null,
         resume: r.resume || { id: checkpoint.id, canContinue: false, pending: [] },
       };
       try {
         resultPayload.saved = await searchResults.save(resultPayload, {
           link, targetWear, exteriors, randomPages, market, statTrak, outputIndex,
+          selection: resultPayload.selection,
         });
       } catch (e) {
         resultPayload.saveError = `结果保存失败：${e.message}`;
@@ -446,6 +469,31 @@ const server = http.createServer(async (req, res) => {
   try { url = new URL(req.url, `http://${req.headers.host || HOST}`); }
   catch { return json(res, 400, { ok: false, error: 'bad url' }); }
 
+  if (['/api/catalog/collections', '/api/catalog/collection', '/api/catalog/plan'].includes(url.pathname)) {
+    if (req.method !== 'GET') return json(res, 405, { ok: false, message: '仅支持 GET' });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new Error('BUFF 资料读取超时，请重试；已确认的资料已缓存。')), 5 * 60 * 1000);
+    res.on('close', () => { if (!res.writableEnded) controller.abort(); });
+    try {
+      const options = { signal: controller.signal, refresh: url.searchParams.get('refresh') === '1' };
+      if (url.pathname === '/api/catalog/collections') return json(res, 200, { ok: true, ...await catalog.collections(options) });
+      const id = url.searchParams.get('collection') || '', statTrak = url.searchParams.get('stattrak') === '1';
+      if (url.pathname === '/api/catalog/collection') {
+        const info = await catalog.collection(id, statTrak, options);
+        return json(res, 200, { ok: true, collection: info.collection, grades: info.grades, fetchedAt: info.fetchedAt, source: 'buff' });
+      }
+      const plan = await catalog.plan(id, url.searchParams.get('grade'), statTrak, options);
+      const planId = randomUUID();
+      catalogPlans.set(planId, plan);
+      if (catalogPlans.size > 100) catalogPlans.delete(catalogPlans.keys().next().value);
+      return json(res, 200, { ok: true, planId, outputs: plan.outputSpecs, materialCount: plan.materialCount,
+        materialGrade: plan.inputRarityLabel, collection: plan.collection, fetchedAt: plan.fetchedAt, source: 'buff' });
+    } catch (e) {
+      if (!res.destroyed) return json(res, 400, { ok: false, message: e.message });
+    } finally { clearTimeout(timeout); }
+    return;
+  }
+
   if (url.pathname === '/api/search-results' || url.pathname.startsWith('/api/search-results/')) {
     if (req.method !== 'GET') return json(res, 405, { ok: false, message: '仅支持 GET' });
     try {
@@ -464,7 +512,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const recipe = await fetchShareRecipe(url.searchParams.get('url') || '', { signal: controller.signal });
       if (!recipe.ok) return json(res, 400, { ok: false, message: recipe.message });
-      const located = locateCollection(recipe);
+      const located = locateCollection(recipe, { allowUnresolvedOutputs: true });
       if (!located.ok) return json(res, 400, { ok: false, message: located.message, error: located.error });
       const plan = planWithQuality(located, recipe.statTrak);
       return json(res, 200, {

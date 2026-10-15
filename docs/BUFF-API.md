@@ -11,6 +11,7 @@
 
 | 用途 | 端点 | 登录要求 |
 |---|---|---|
+| 收藏品目录 | `GET /market/csgo` 的 `#search-itemset` | 目录页面可公开访问 |
 | 市场列表/搜索 | `GET /api/market/goods` | **需要登录** |
 | 单品挂单（含每笔磨损） | `GET /api/market/goods/sell_order` | 登录后稳定；匿名有配额 |
 | 单品详情（拿磨损区间） | `GET /api/market/goods/info` | 登录后稳定；匿名有配额 |
@@ -73,11 +74,19 @@ data.items[].asset_info.tradable_unfrozen_time
 ### 3.4 单品详情里的磨损区间
 
 ```
-data.paintwear_range = ["0.15","0.38"]     // 字符串数组，决定这件材料能炼出什么
+data.paintwear_range = ["0.15","0.38"]     // 当前外观商品的可用磨损范围
 data.containers = ["Operation Phoenix Weapon Case"]
 ```
 
-炼金的材料筛选必须用它来判断「这件材料的区间能否覆盖目标均值」。
+该范围属于当前外观商品，不能直接用于炼金归一化。`data.relative_goods` 包含同枪皮的关联外观；只取 `is_change` 为假的同品质商品，按外观顺序查询最前与最后的商品详情，合并其最小值和最大值作为完整枪皮区间。材料归一化与产物映射均使用完整区间，挂单筛选则使用所选外观与完整区间的交集。
+
+### 3.5 收藏品与品质元数据（2026-10-15 实测）
+
+`/market/csgo` 的 `#search-itemset` 中，`h6` 表示分类，`p[value]` 提供收藏品 / 箱子 ID 和中文名称；本次实测读取 92 项。`/api/market/goods?game=csgo&itemset=<id>&quality=normal` 分页列出商品，暗金使用 `quality=strange`。每项的 `goods_info.info.tags` 含 `rarity`、`exterior`、`itemset` 等标签；代码按标签和英文商品身份再过滤，排除箱子、纪念品、刀和手套，合并同枪皮的外观商品。
+
+`src/market/catalog.mjs` 负责目录、分页读取和完整区间核验，缓存到 `data/buff-catalog/catalog.json`，有效期 24 小时。手动刷新会重新抓取；登录失败、元数据不完整或区间核验失败时返回明确错误。
+
+单收藏品投入同品质的 10 把材料时，下一品质的每种枪皮概率相等。完整区间相同的产物，对同组材料映射出的最终磨损相同。页面同时列出完整区间和相同磨损分组。
 
 ## 4. 风控
 

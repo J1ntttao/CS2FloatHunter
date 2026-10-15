@@ -28,6 +28,7 @@ export const GRADE_CN = {
 // 因此集中维护别名，避免每条配方都依赖皮肤名称反查。
 export const COLLECTION_ALIASES = {
   'the revolution collection': '变革收藏品',
+  'the achroma collection': '墨彩收藏品',
   'the genesis collection': ['创世纪收藏品'],
   'the fracture collection': '裂空武器箱收藏品',
   'the shattered web collection': '“裂网大行动”收藏品',
@@ -101,6 +102,17 @@ export function normalizeName(name) {
     .toLowerCase();
 }
 
+/**
+ * 统一 CS2UP/BUFF 常见的武器名称写法。
+ * CS2UP 的中文翻译会把 M4A1-S 写成“ M4A1 消音型”，材料库沿用
+ * BUFF 的“M4A1消音版”；两者指向同一个 paint index。
+ */
+function canonicalWeaponName(name) {
+  return normalizeName(name)
+    .replace(/^m4a1(?:\s*-\s*s|\s*消音(?:型|版))(?=\s*[|(])/, 'm4a1消音版')
+    .replace(/^usp(?:\s*-\s*s|\s*消音(?:型|版))(?=\s*[|(])/, 'usp消音版');
+}
+
 /** 判断名字里是否含 StatTrak / 纪念品 / 匕首手套标记 */
 export function nameFlags(name) {
   const s = String(name ?? '');
@@ -121,10 +133,14 @@ export function findInDbByBuffName(buffName) {
   // 先精确（忽略磨损）
   let hit = db.find(m => normalizeName(m.name) === n);
   if (hit) return hit;
+  // CS2UP 与 BUFF 的武器中文译名略有差异，先做武器别名归一化。
+  const canonical = canonicalWeaponName(buffName);
+  hit = db.find(m => canonicalWeaponName(m.name) === canonical);
+  if (hit) return hit;
   // 再放宽：去掉 StatTrak 前缀等差异
-  const strip = s => normalizeName(s)
+  const strip = s => canonicalWeaponName(normalizeName(s)
     .replace(/\(\s*stattrak™?\s*\)/g, '')
-    .replace(/stattrak™?|纪念品|souvenir/g, '').replace(/\s+/g, '').trim();
+    .replace(/stattrak™?|纪念品|souvenir/g, '').trim()).replace(/\s+/g, '');
   const n2 = strip(buffName);
   hit = db.find(m => strip(m.name) === n2);
   return hit || null;

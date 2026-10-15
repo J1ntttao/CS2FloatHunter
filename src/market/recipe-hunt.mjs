@@ -53,6 +53,7 @@ function matchesGoods(goods, material, statTrak) {
 
 /** 严格模式按枪皮分组；扩展模式按分享链接中的收藏品配额展开全部同档材料。 */
 function searchSpecsFor(plan) {
+  if (plan.materialSource === 'buff') return plan.materialSpecs.map(m => ({ ...m }));
   if (!plan.collectionSpecs) {
     return plan.materialSpecs.map(m => ({ ...m, quotaGroupId: m.id }));
   }
@@ -105,7 +106,7 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
   const quotaText = plan.collectionSpecs
     ? plan.collectionSpecs.map(m => `${m.collection} × ${m.count}`).join('；')
     : materialBands.map(m => `${m.name} × ${m.count}`).join('；');
-  onProgress(`${plan.collectionSpecs ? '按链接中的收藏品配额搜索全部同档枪皮' : '严格使用链接中的枪皮'}，共 ${plan.totalCount} 把：${quotaText}`);
+  onProgress(`${plan.materialSource === 'buff' ? '按 BUFF 收藏品搜索全部同档枪皮' : plan.collectionSpecs ? '按链接中的收藏品配额搜索全部同档枪皮' : '严格使用链接中的枪皮'}，共 ${plan.totalCount} 把：${quotaText}`);
   onProgress(`目标产物「${plan.targetOutput.name}」磨损 ${targetWear}，区间 [${outRange.join(', ')}]；需要平均归一化磨损 ${normalizedTarget.toFixed(10)}，允许低磨损与高磨损材料互相补偿，搜索已勾选档位的完整区间：${exteriors.map(k => WEAR_TIERS[k].label).join('、')}。`);
 
   const pool = [], offers = [], perItem = [], seenOrders = new Set(), assetSlots = new Map();
@@ -267,7 +268,8 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
     let variants = [];
     try {
       if (usesBuff) {
-        const listed = await request(`buff:goods:${material.id}`, () => buff.listGoods({ search: material.name, pageSize: 50 }));
+        const listed = material.variants?.length ? { ok: true, items: material.variants }
+          : await request(`buff:goods:${material.id}`, () => buff.listGoods({ search: material.name, pageSize: 50 }));
         if (!listed.ok) errors.push(`BUFF：${listed.kind || '商品查询失败'}`);
         else variants = listed.items.filter(g => matchesGoods(g, material, statTrak));
       }
@@ -452,7 +454,8 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
     const forMath = picks.map(m => ({ wear: m.paintwear, matMin: m.matRange[0], matMax: m.matRange[1] }));
     const calculatedWear = outputWear(forMath, ...outRange);
     const score = Math.abs(calculatedWear - f32(targetWear));
-    const outputs = plan.outputSpecs.map(output => ({ ...output, wear: outputWear(forMath, ...output.range) }));
+    const outputs = plan.outputSpecs.map(output => ({ ...output,
+      wear: output.range ? outputWear(forMath, ...output.range) : null }));
     const totals = new Map();
     for (const m of picks) if (Number.isFinite(m.price)) {
       const currency = currencyOf(m);

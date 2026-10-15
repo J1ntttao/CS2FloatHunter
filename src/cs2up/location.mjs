@@ -30,7 +30,7 @@ export function selectTargetOutput(plan, outputIndex = 0) {
 }
 
 /** 从分享配方汇总各收藏品投入数量，并确定同等级候选范围。 */
-export function locateCollection(recipe) {
+export function locateCollection(recipe, { allowUnresolvedOutputs = false } = {}) {
   const groups = new Map();
   for (const input of recipe.materials || []) {
     const db = findInDbByBuffName(input.name);
@@ -64,7 +64,17 @@ export function locateCollection(recipe) {
   const outputSpecs = [];
   for (const output of recipe.outputs || []) {
     const db = findInDbByBuffName(output.name);
-    if (!db) return { ok: false, error: 'recipe_output_not_found', message: `无法确认产物「${output.name}」的完整磨损区间，已停止搜索。` };
+    if (!db) {
+      const message = `无法确认产物「${output.name}」的完整磨损区间，请选择其他产物。`;
+      if (!allowUnresolvedOutputs) return { ok: false, error: 'recipe_output_not_found', message };
+      const collection = findCollectionName(output.collection);
+      if (!collection || !materialSpecs.some(m => m.collection === collection)) {
+        return { ok: false, error: 'recipe_output_mismatch', message: `产物「${output.name}」不属于配方材料的收藏品。` };
+      }
+      outputSpecs.push({ name: skinName(output.name), collection, range: null,
+        probability: output.probability, unavailableReason: message });
+      continue;
+    }
     const collection = findCollectionName(output.collection) || db.collections[0];
     if (!db.collections.includes(collection) || !materialSpecs.some(m => m.collection === collection)) {
       return { ok: false, error: 'recipe_output_mismatch', message: `产物「${output.name}」不属于配方材料的收藏品。` };

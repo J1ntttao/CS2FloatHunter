@@ -362,11 +362,16 @@ const child = spawn(process.execPath, ['--input-type=module', '-e', `
   let retryScenario = false, timeoutOnce = true, retryRecipeReads = 0;
   const completedRequests = new Set();
   const payload = JSON.parse(fs.readFileSync(${JSON.stringify(new URL('ref/cs2up/sample-payload-099784dbf1e1240d.json', root).pathname.replace(/^\/(\w:)/, '$1'))}));
+  const reportedPayload = JSON.parse(fs.readFileSync(${JSON.stringify(new URL('ref/cs2up/sample-payload-6cc935885d8238ab.json', root).pathname.replace(/^\/(\w:)/, '$1'))}));
   globalThis.fetch = async url => {
     if (String(url).includes('2222222222222222')) {
       retryScenario = true;
       if (++retryRecipeReads > 1) throw new Error('重试不应重新读取成功的 CS2UP 配方');
     }
+    if (String(url).includes('6cc935885d8238ab')) return new Response(JSON.stringify({ok:true,item:{payload:reportedPayload}}));
+    if (String(url).includes('3333333333333333')) return new Response(JSON.stringify({ok:true,item:{payload:{...payload,
+      outputs:[{name:'Unknown output',cn:'未知产物',collection:payload.outputs[0].collection,probability:0.01},...payload.outputs]
+    }}}));
     return new Response(JSON.stringify({ok:true,item:{payload:{...payload,
       stattrak:String(url).includes('1111111111111111')
     }}}));
@@ -503,6 +508,25 @@ try {
     assert.ok(result.recipes.every(r => r.materials.every(m => m.marketHashName.startsWith('StatTrak™ ') === expected)));
   }
   console.log('✓ 真实 API 默认跟随暗金链接，明确 stattrak=0 可关闭暗金，普通链接 stattrak=1 可开启');
+  const reportedMetadata = await (await fetch(`http://127.0.0.1:${port}/api/recipe?url=6cc935885d8238ab`)).json();
+  assert.equal(reportedMetadata.ok, true);
+  assert.equal(reportedMetadata.statTrak, false);
+  assert.equal(reportedMetadata.outputs.length, 7);
+  assert.deepEqual(reportedMetadata.outputs.find(o => o.name.includes('隐伏帝王龙')).range, [0, 0.8]);
+  const partialMetadata = await (await fetch(`http://127.0.0.1:${port}/api/recipe?url=3333333333333333`)).json();
+  assert.equal(partialMetadata.ok, true);
+  assert.equal(partialMetadata.statTrak, false);
+  assert.equal(partialMetadata.outputs[0].range, null);
+  assert.match(partialMetadata.outputs[0].unavailableReason, /完整磨损区间/);
+  const unavailableStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=3333333333333333&wear=0.2&market=steam&output_index=0`)).text();
+  assert.match(unavailableStream, /recipe_output_not_found/);
+  const partialStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=3333333333333333&wear=0.2&exteriors=ft,mw&market=steam&output_index=1`)).text();
+  assert.ok(!partialStream.includes('event: error'), partialStream);
+  const partialResult = JSON.parse(partialStream.match(/event: result\ndata: ([^\n]+)/)[1]);
+  assert.equal(partialResult.targetOutputIndex, 1);
+  assert.equal(partialResult.recipes[0].outputs[0].wear, null);
+  assert.equal(partialResult.targetOutput, partialMetadata.outputs[1].name);
+  console.log('✓ 故障链接 API 读取全部产物；区间缺失仅禁用对应项，其他目标仍能完成搜索');
   const selectedMetadata = await (await fetch(`http://127.0.0.1:${port}/api/recipe?url=099784dbf1e1240d`)).json();
   const selectedStream = await (await fetch(`http://127.0.0.1:${port}/api/hunt?url=099784dbf1e1240d&wear=0.2&exteriors=ft,mw&market=steam&output_index=1`)).text();
   assert.ok(!selectedStream.includes('event: error'), selectedStream);

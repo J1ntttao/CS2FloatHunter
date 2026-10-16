@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-15T09:01:04.523Z",
+  "exportedAt": "2026-10-15T11:23:52.379Z",
   "source": "web-ui",
   "site": "steam",
   "counts": {
@@ -9,7 +9,7 @@
     {
       "domain": "steamcommunity.com",
       "name": "steamLoginSecure",
-      "value": "76561198333899388%7C%7CeyAidHlwIjogIkpXVCIsICJhbGciOiAiRWREU0EiIH0.eyAiaXNzIjogInI6MDAxNV8yODY0QUVDQV9BNjk1NyIsICJzdWIiOiAiNzY1NjExOTgzMzM4OTkzODgiLCAiYXVkIjogWyAid2ViOmNvbW11bml0eSIgXSwgImV4cCI6IDE3OTIxMzQxOTAsICJuYmYiOiAxNzgzNDA3NzA2LCAiaWF0IjogMTc5MjA0NzcwNiwgImp0aSI6ICIwMDBCXzI4Rjg1MUNGX0U4MERDIiwgIm9hdCI6IDE3ODI0NTgyMTYsICJydF9leHAiOiAxODAwNzA1MTE2LCAicGVyIjogMCwgImlwX3N1YmplY3QiOiAiMjIzLjE2MC4yMjYuMSIsICJpcF9jb25maXJtZXIiOiAiMTU0Ljg4LjY0LjE1MCIgfQ.dip01iJml_GZiA5PGcHz0xNf4rtQRRYKEL6YQuv77Y3Pqj5LvkUE6HQ6gNeOTu-jE0JUZGdmkrB02V-OyKFDAg",
+      "value": "76561199179944741%7C%7CeyAidHlwIjogIkpXVCIsICJhbGciOiAiRWREU0EiIH0.eyAiaXNzIjogInI6MDAxMF8yOEY4NTFCQV9FRENGNSIsICJzdWIiOiAiNzY1NjExOTkxNzk5NDQ3NDEiLCAiYXVkIjogWyAid2ViOmNvbW11bml0eSIgXSwgImV4cCI6IDE3OTIxNTEyMTEsICJuYmYiOiAxNzgzNDIzNDE4LCAiaWF0IjogMTc5MjA2MzQxOCwgImp0aSI6ICIwMDBFXzI4RjlBMEVEXzdGNTI3IiwgIm9hdCI6IDE3OTE5NTkwMDEsICJydF9leHAiOiAxODEwMjQ5NTg5LCAicGVyIjogMCwgImlwX3N1YmplY3QiOiAiMTYuMTYzLjk5LjY0IiwgImlwX2NvbmZpcm1lciI6ICIxMTIuOTcuMTE1LjIwOSIgfQ.HQl2tmu6GC_HRPZVX3AeQNfeHcn9M8iEkTtcWZQE4HKtCe5GX9djYs3QXk5ORUH4llAFuwAe7FNBufLncGFEAw",
       "path": "/",
       "secure": true,
       "httpOnly": true
@@ -17,7 +17,7 @@
     {
       "domain": "steamcommunity.com",
       "name": "sessionid",
-      "value": "d281724e41cc039644b18ebc",
+      "value": "1c9ac1ba388d9bdd08d4917d",
       "path": "/",
       "secure": true,
       "httpOnly": false

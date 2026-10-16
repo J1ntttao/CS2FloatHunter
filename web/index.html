@@ -294,6 +294,8 @@
         <button type="button" data-m="steam">仅 Steam</button>
       </div>
       <div class="note" id="marketNote">BUFF 提供逐笔精确磨损，用于精确求解。</div>
+      <label class="check" style="margin-top:14px"><input type="checkbox" id="verifyAvailability" checked> 检查挂单是否仍在售</label>
+      <div class="note">开启后，搜索完成会复核选中的挂单；发现已被买走时自动替换并重新求解。关闭后直接使用搜索快照。</div>
     </div>
 
     <details style="margin-top:20px">
@@ -527,7 +529,7 @@ function renderResult(d) {
   const availabilityNote = d.availability
     ? `<div class="msg ${d.availability.errors?.length ? 'warn' : 'good'}">${d.availability.checked
       ? `已复核最终配方的 ${d.availability.checked} 件挂单${d.availability.unavailable?.length ? `，搜索期间移除 ${d.availability.unavailable.length} 件已被购买的挂单并完成替换` : ''}。`
-      : d.availability.skipped ? '当前市场适配器未提供挂单复核，结果按搜索快照返回。' : '最终配方未产生可复核的挂单。'}${d.availability.errors?.length ? ` 部分挂单复核失败：${esc(d.availability.errors.join('；'))}` : ''}</div>`
+      : d.availability.skipped ? (d.availability.enabled === false ? '已关闭挂单在售检查，结果按搜索快照返回。' : '当前市场适配器未提供挂单复核，结果按搜索快照返回。') : '最终配方未产生可复核的挂单。'}${d.availability.errors?.length ? ` 部分挂单复核失败：${esc(d.availability.errors.join('；'))}` : ''}</div>`
     : '';
 
   $('resultBox').innerHTML = `
@@ -935,12 +937,13 @@ function startSearch({ resume = false } = {}) {
   if (!selectedExteriors?.length) { statusLine('请至少勾选一个搜索品质等级', 'bad'); return; }
   const options = resume ? activeSearchOptions : {
     randomPages: $('randomPages')?.value || '0', outputIndex: typeof selectedOutputIndex === 'number' ? selectedOutputIndex : 0,
-    planId: direct ? catalogPlanId : null,
+    planId: direct ? catalogPlanId : null, verifyAvailability: $('verifyAvailability')?.checked !== false,
   };
   if (!Number.isInteger(Number(options?.randomPages)) || Number(options.randomPages) < 0 || Number(options.randomPages) > 500) { statusLine('请填写有效的随机页数', 'bad'); return; }
   if (!resume) { activeSearchOptions = options; activeSearchExteriors = selectedExteriors; activeResumeId = null; reset(); }
   $('go').disabled = true;
   $('stop').style.display = '';
+  if ($('verifyAvailability')) $('verifyAvailability').disabled = true;
   currentMaterialId = null;
   if (nextButton) { nextButton.style.display = ''; nextButton.disabled = true; }
   updateEta(Number.NaN);
@@ -953,6 +956,7 @@ function startSearch({ resume = false } = {}) {
     output_index: String(options.outputIndex ?? 0),
     interval: $('interval').value, market: MARKET,
     insecure: $('insecure').checked ? '1' : '0',
+    verify_availability: options.verifyAvailability === false ? '0' : '1',
   });
   if (options.planId) { qs.delete('url'); qs.set('plan_id', options.planId); }
   const qualitySearchSid = qualityInputSid();
@@ -982,6 +986,7 @@ function startSearch({ resume = false } = {}) {
     currentMaterialId = null;
     if (nextButton) nextButton.style.display = 'none';
     $('stattrak').disabled = false;
+    if ($('verifyAvailability')) $('verifyAvailability').disabled = false;
     // 错误事件和 SSE 关闭事件的到达顺序不固定；以错误事件携带的恢复状态为准，
     // 不依赖此前的 resume 事件是否已经让 activeResumeId 更新。
     if (resumeInfo?.id && resumeInfo.canContinue) activeResumeId = resumeInfo.id;

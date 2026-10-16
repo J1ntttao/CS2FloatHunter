@@ -211,6 +211,7 @@ async function handleHunt(req, res, url) {
   const intervalMs = Math.max(1200, Math.min(8000, Number(url.searchParams.get('interval') || 2200)));
   const qualityParam = url.searchParams.get('stattrak');
   const market = normalizeMarket(url.searchParams.get('market'));
+  const verifyAvailability = url.searchParams.get('verify_availability') !== '0';
   const outputIndexRaw = url.searchParams.get('output_index');
   const outputIndex = outputIndexRaw == null || outputIndexRaw === '' ? 0 : Number(outputIndexRaw);
   const allowInsecure = url.searchParams.get('insecure') !== '0';
@@ -221,7 +222,7 @@ async function handleHunt(req, res, url) {
   const resumeId = url.searchParams.get('resume_id') || '';
   const checkpointSignature = JSON.stringify({
     link, wear: wearRaw, exteriors, intervalMs, randomPages, market, quality: qualityParam || null,
-    outputIndex, catalogPlanId,
+    outputIndex, catalogPlanId, verifyAvailability,
   });
 
   sseHead(res);
@@ -358,7 +359,7 @@ async function handleHunt(req, res, url) {
         r = await hunter.huntFromSteam({
           recipePlan: loc, resumeState: checkpoint,
           collectionName: loc.collection, materialGrade: loc.grade,
-          targetWear, statTrak, exteriors, steamRandomPages: randomPages, count: loc.totalCount, steam,
+          targetWear, statTrak, exteriors, steamRandomPages: randomPages, count: loc.totalCount, steam, verifyAvailability,
         }, { onProgress: progress, onWork, shouldSkip: () => task.consumeSkip(), timeBudgetMs: HUNT_SOLVER_BUDGET_MS, wants: 5 });
       } else {
         const access = marketAccess(market, { hasBuff: hasCookies('buff') });
@@ -371,7 +372,7 @@ async function handleHunt(req, res, url) {
           steam: market === 'both' ? new SteamMarket({ minIntervalMs: 2500, allowInsecure, proxy, verbose: false, signal: task.signal }) : undefined,
           recipePlan: loc, resumeState: checkpoint,
           collectionName: loc.collection, materialGrade: loc.grade,
-          targetWear, statTrak, exteriors, steamRandomPages: randomPages, count: loc.totalCount,
+          targetWear, statTrak, exteriors, steamRandomPages: randomPages, count: loc.totalCount, verifyAvailability,
         }, { onProgress: progress, onWork, shouldSkip: () => task.consumeSkip(), timeBudgetMs: HUNT_SOLVER_BUDGET_MS, wants: 5 });
       }
       task.check();

@@ -71,7 +71,7 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
   shouldSkip = () => false, timeBudgetMs = 30000, wants = 5 }) {
   const { recipePlan: plan, targetWear, statTrak = false, exteriors: requestedExteriors,
     dataSource, steam, steamPages = 4, steamMaxPages = Infinity, steamRandomPages = 0,
-    buffPages = Infinity, resumeState = null } = cfg;
+    buffPages = Infinity, resumeState = null, verifyAvailability = true } = cfg;
   if (!plan?.ok) return { ok: false, error: 'invalid_recipe_plan', message: '缺少有效的分享配方材料清单。' };
   const usesSteam = dataSource === 'steam' || dataSource === 'both';
   const usesBuff = dataSource !== 'steam';
@@ -201,9 +201,10 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
 
   // 搜索期间挂单可能被买走；最终组合输出前按挂单 ID 做一次实时复核。
   const availabilityCache = new Map();
-  const availabilityState = { checked: 0, unavailable: [], errors: [], skipped: false };
+  const availabilityState = { enabled: verifyAvailability, checked: 0, unavailable: [], errors: [], skipped: !verifyAvailability };
   const verifySelectedListings = async picks => {
     const unique = [...new Map(picks.map(p => [listingKey(p), p])).values()];
+    if (!verifyAvailability) return [];
     const unavailable = [];
     // 第一件材料通常最早完成抓取，也最容易在长搜索期间失效；倒序复核，
     // 让页面最先展示的材料最后一次接触市场，缩短复核到点击之间的窗口。

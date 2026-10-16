@@ -124,6 +124,22 @@ assert.deepEqual(raced.availability.unavailable, [`steam:${plan.materialSpecs[0]
 assert.ok(raced.recipes.every(r => !r.materials.some(m => m.listingId === `${plan.materialSpecs[0].id}:0`)));
 console.log('✓ 选中挂单搜索期间被买走时，复核会移除并自动换用替代挂单');
 
+let disabledAvailabilityChecks = 0;
+const disabledCheckSteam = {
+  async listingsWithFloats(name) {
+    const material = plan.materialSpecs.find(m => name.startsWith(m.nameEn + ' ('));
+    return { ok: true, pagesFetched: 1, listings: candidates(material, 0.2).map(l => ({ ...l, marketHashName: name })) };
+  },
+  async verifyListing() { disabledAvailabilityChecks++; throw new Error('不应在关闭时检查'); },
+};
+const disabledAvailability = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2,
+  exteriors: ['ft'], steam: disabledCheckSteam, verifyAvailability: false }, { timeBudgetMs: 1000 });
+verifyResult(disabledAvailability, 0.2);
+assert.equal(disabledAvailability.availability.enabled, false);
+assert.equal(disabledAvailability.availability.checked, 0);
+assert.equal(disabledAvailabilityChecks, 0);
+console.log('✓ 关闭挂单在售检查时跳过实时复核并直接使用搜索快照');
+
 const buffCheckMarket = new BuffMarket({ minIntervalMs: 0 });
 const buffCheckPages = [];
 buffCheckMarket.sellOrders = async query => {

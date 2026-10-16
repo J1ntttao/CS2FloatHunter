@@ -19,11 +19,12 @@ const ok = (condition, message) => {
 const html = fs.readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
 const stopCode = html.slice(html.indexOf("let MARKET = 'buff';"), html.indexOf("$('stop').onclick = stopSearch;"));
 const goCode = html.slice(html.indexOf("$('go').onclick ="), html.indexOf('function openBuyPanel'));
-const elements = Object.fromEntries(['link', 'wear', 'go', 'stop', 'continue', 'eta', 'exterior_fn', 'exterior_mw', 'exterior_ft', 'exterior_ww', 'exterior_bs', 'randomPages', 'next', 'interval', 'insecure', 'proxy', 'stattrak', 'qualityNote']
+const elements = Object.fromEntries(['link', 'wear', 'go', 'stop', 'continue', 'eta', 'exterior_fn', 'exterior_mw', 'exterior_ft', 'exterior_ww', 'exterior_bs', 'randomPages', 'next', 'interval', 'insecure', 'proxy', 'stattrak', 'verifyAvailability', 'qualityNote']
   .map(id => [id, { style: {}, value: '', checked: true }]));
 elements.link.value = '7928752d714f8e31';
 elements.wear.value = '0.2';
 elements.randomPages.value = '20';
+elements.verifyAvailability.checked = true;
 const sources = [];
 const statuses = [];
 let acknowledgeCancel;
@@ -46,6 +47,8 @@ const page = vm.createContext({
 });
 vm.runInContext(stopCode + goCode, page);
 elements.go.onclick();
+ok(new URL(sources[0].url, 'http://localhost').searchParams.get('verify_availability') === '1',
+  '默认开启挂单在售检查并传给搜索接口');
 sources[0].handlers.material({ data: JSON.stringify({ type: 'materialStart', id: 'mat-current' }) });
 ok(!elements.next.disabled, '当前武器开始抓取时开放下一把按钮');
 const cancelFetch = page.fetch;

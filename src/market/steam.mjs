@@ -502,6 +502,43 @@ export class SteamMarket {
     };
   }
 
+  /**
+   * 复核一条已经选入配方的挂单是否仍在售。
+   *
+   * 搜索和求解之间可能已经有人买走挂单；detail 参数会让 Steam
+   * 返回该挂单所在的商品页，再从 SSR 数据里按 listingId 精确确认。
+   */
+  async verifyListing(listing, { cookies = null } = {}) {
+    this.signal?.throwIfAborted();
+    if (!listing?.listingId || !listing.marketHashName) {
+      return { ok: false, available: null, error: '缺少 Steam 挂单身份' };
+    }
+    const headers = {
+      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      referer: `${ORIGIN}/market/`,
+      'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8',
+    };
+    if (cookies) headers.cookie = cookies;
+    try {
+      const url = steamListingUrl(listing.marketHashName, listing.listingId);
+      const r = await this.fetch(url, { headers, retries: 1, timeoutMs: 40000 });
+      this.signal?.throwIfAborted();
+      if (r.status !== 200) return { ok: false, available: null, error: `HTTP ${r.status}` };
+      const parsed = parseValveSsrListings(r.body || '');
+      if (!parsed.ok) return { ok: false, available: null, error: parsed.error };
+      const rows = [...parsed.listings, ...parsed.pendingListings];
+      const found = rows.find(item => item.listingId === String(listing.listingId));
+      if (!found) return { ok: true, available: false };
+      if (listing.assetId && found.assetId && String(listing.assetId) !== String(found.assetId)) {
+        return { ok: true, available: false };
+      }
+      return { ok: true, available: true, listing: found };
+    } catch (e) {
+      this.signal?.throwIfAborted();
+      return { ok: false, available: null, error: e.message };
+    }
+  }
+
   /** 连通性自检 */
   async health() {
     const r = await this.priceOverview('AK-47 | Redline (Field-Tested)');

@@ -382,7 +382,7 @@ async function handleHunt(req, res, url) {
           message: r.message,
           code: r.error,
           detail: { perItem: r.perItem || null, skippedRanges: r.skippedRanges || null,
-            reachableRange: r.reachableRange || null },
+            reachableRange: r.reachableRange || null, availability: r.availability || null },
           resume: r.resume || { id: checkpoint.id, canContinue: true, pending: [] },
         });
         return;
@@ -423,6 +423,7 @@ async function handleHunt(req, res, url) {
         exactFound: r.exactFound,
         bestScore: r.bestScore,
         optimization: r.optimization,
+        availability: r.availability || null,
         reachableRange: r.reachableRange,
         ieee754: r.ieee754,
         targetWear,
@@ -450,10 +451,13 @@ async function handleHunt(req, res, url) {
       ? checkpoint.pendingMaterials.filter(item => !checkpoint.items[item.id]?.complete)
       : Object.entries(checkpoint.items)
         .filter(([, item]) => !item.complete).map(([id]) => ({ id }));
+    const timedOut = e?.name === 'TimeoutError';
     const resume = { id: checkpoint.id,
-      canContinue: !checkpoint.pendingMaterials || pending.length > 0, pending };
+      // 超时也可能发生在材料全部抓完后的求解/库存复核阶段；保留断点，
+      // 让“重试失败项（继续）”重新执行收尾阶段，而不是因 pending 为空隐藏入口。
+      canContinue: timedOut || !checkpoint.pendingMaterials || pending.length > 0, pending };
     sendResume(resume);
-    const message = e?.name === 'TimeoutError'
+    const message = timedOut
       ? '搜索超时，已保留成功材料。请点击“重试失败项（继续）”，只补抓失败或尚未完成的材料。'
       : e?.message || String(e);
     eta.update({ type: 'done' });

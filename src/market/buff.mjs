@@ -168,6 +168,30 @@ export class BuffMarket {
     };
   }
 
+  /** 复核一条已经选入配方的挂单是否仍在售。 */
+  async verifyListing(listing, { maxPages = 20 } = {}) {
+    if (!listing?.goodsId || !listing.orderId) {
+      return { ok: false, available: null, error: '缺少 BUFF 挂单身份' };
+    }
+    let page = 1;
+    let totalPage = null;
+    while (page <= maxPages) {
+      const result = await this.sellOrders({
+        goodsId: listing.goodsId,
+        pageNum: page,
+        pageSize: 60,
+      });
+      if (!result.ok) return { ok: false, available: null, error: result.kind || '挂单查询失败' };
+      const found = result.listings.find(item => String(item.orderId) === String(listing.orderId) &&
+        (!listing.assetId || !item.assetId || String(item.assetId) === String(listing.assetId)));
+      if (found) return { ok: true, available: true, listing: found };
+      totalPage = result.totalPage || totalPage || (result.total ? Math.ceil(result.total / 60) : null);
+      if (!result.listings.length || (totalPage && page >= totalPage)) break;
+      page++;
+    }
+    return { ok: true, available: false };
+  }
+
   /** 把 buff 挂单对象规整成内部结构 */
   _toListing(it, goodsInfos = {}) {
     const ai = it.asset_info || {};

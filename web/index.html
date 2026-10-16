@@ -524,6 +524,11 @@ function renderResult(d) {
   const skipped = (d.skippedRanges || []).length
     ? `<div class="note">已跳过 ${d.skippedRanges.length} 个不可用磨损档：${d.skippedRanges.map(r => `[${r[0]},${r[1]}]`).join(' ')}</div>`
     : '';
+  const availabilityNote = d.availability
+    ? `<div class="msg ${d.availability.errors?.length ? 'warn' : 'good'}">${d.availability.checked
+      ? `已复核最终配方的 ${d.availability.checked} 件挂单${d.availability.unavailable?.length ? `，搜索期间移除 ${d.availability.unavailable.length} 件已被购买的挂单并完成替换` : ''}。`
+      : d.availability.skipped ? '当前市场适配器未提供挂单复核，结果按搜索快照返回。' : '最终配方未产生可复核的挂单。'}${d.availability.errors?.length ? ` 部分挂单复核失败：${esc(d.availability.errors.join('；'))}` : ''}</div>`
+    : '';
 
   $('resultBox').innerHTML = `
     <span class="sect-label" id="summary">搜索概要</span>
@@ -533,6 +538,7 @@ function renderResult(d) {
         : d.optimization.comparable ? '当前最优组合；尚未证明最低价。' : '存在不同币种或未知价格，无法证明统一最低价。'}${d.randomPages ? ' 本次为随机抽页，未覆盖全部挂单。' : d.resume?.canContinue ? ' 仍有档位尚未抓取完成。' : ' 结论仅适用于本次抓到的挂单。'}</div>` : ''}
       ${d.saved ? `<div class="note">已保存 · ${esc(new Date(d.saved.savedAt).toLocaleString())} · <a class="link" href="/api/search-results/${encodeURIComponent(d.saved.id)}?download=1">导出 JSON</a> · 历史挂单价格与库存以购买时为准。</div>` : ''}
       ${d.saveError ? `<div class="msg warn">${esc(d.saveError)}</div>` : ''}
+      ${availabilityNote}
       ${ieBox}
       ${!d.exactFound ? `<div class="msg warn">未精确命中，以下为本次候选中找到的近似组合。实际产物磨损 ${wearFmt(d.recipes[0]?.outputWear)}，目标 ${wearFmt(d.targetWear)}，误差 ${Number(d.bestScore).toExponential(3)}。</div>` : ''}
       ${d.dataSourceNote ? `<div class="msg ${d.dataSource === 'steam' ? 'good' : 'warn'}">${esc(d.dataSourceNote)}</div>` : ''}
@@ -967,7 +973,7 @@ function startSearch({ resume = false } = {}) {
   const listen = (type, handler) => es.addEventListener(type, e => {
     if (activeES === es) handler(e);
   });
-  const finish = () => {
+  const finish = (resumeInfo = null) => {
     es.close();
     if (activeES !== es) return;
     activeES = null; activeTaskId = null;
@@ -976,6 +982,9 @@ function startSearch({ resume = false } = {}) {
     currentMaterialId = null;
     if (nextButton) nextButton.style.display = 'none';
     $('stattrak').disabled = false;
+    // 错误事件和 SSE 关闭事件的到达顺序不固定；以错误事件携带的恢复状态为准，
+    // 不依赖此前的 resume 事件是否已经让 activeResumeId 更新。
+    if (resumeInfo?.id && resumeInfo.canContinue) activeResumeId = resumeInfo.id;
     if (continueButton && activeResumeId) continueButton.style.display = '';
   };
   listen('stage', e => {
@@ -1022,13 +1031,15 @@ function startSearch({ resume = false } = {}) {
   });
   listen('error', e => {
     let msg = '连接中断';
+    let resumeInfo = null;
     try {
       const data = JSON.parse(e.data);
       msg = data.message || msg;
-      if (data.resume) setResume(data.resume);
+      resumeInfo = data.resume || null;
+      if (resumeInfo) setResume(resumeInfo);
     } catch {}
     statusLine('错误：' + msg, 'bad');
-    finish();
+    finish(resumeInfo);
   });
   es.onerror = () => { if (es.readyState === EventSource.CLOSED) finish(); };
 }

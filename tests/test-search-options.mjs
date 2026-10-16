@@ -50,6 +50,7 @@ const plan = { ok: true, totalCount: 10, collection: 'test', grade: 'milspec',
   targetOutput: { name: 'target', range: [0, 1] }, outputSpecs: [{ name: 'target', range: [0, 1] }],
   materialSpecs: ['a', 'b'].map(id => ({ id, name: id, nameEn: `${id} | skin`, count: 5, range: [0, 1], collection: 'test' })) };
 const skipAdapter = new SteamMarket({ minIntervalMs: 0 });
+skipAdapter.verifyListing = async () => ({ ok: true, available: true });
 const fetched = [];
 skipAdapter.fetch = async url => {
   const u = new URL(url), hash = decodeURIComponent(u.pathname.split('/').at(-1));

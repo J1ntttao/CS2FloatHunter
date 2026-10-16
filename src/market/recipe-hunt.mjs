@@ -109,7 +109,7 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
   onProgress(`${plan.materialSource === 'buff' ? '按 BUFF 收藏品搜索全部同档枪皮' : plan.collectionSpecs ? '按链接中的收藏品配额搜索全部同档枪皮' : '严格使用链接中的枪皮'}，共 ${plan.totalCount} 把：${quotaText}`);
   onProgress(`目标产物「${plan.targetOutput.name}」磨损 ${targetWear}，区间 [${outRange.join(', ')}]；需要平均归一化磨损 ${normalizedTarget.toFixed(10)}，允许低磨损与高磨损材料互相补偿，搜索已勾选档位的完整区间：${exteriors.map(k => WEAR_TIERS[k].label).join('、')}。`);
 
-  const pool = [], offers = [], perItem = [], seenOrders = new Set(), assetSlots = new Map();
+  let pool = [], offers = [], perItem = [], seenOrders = new Set(), assetSlots = new Map();
   const rejected = new Map();
   const rejectionCounts = material => {
     const counts = {};
@@ -197,6 +197,41 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
     assetSlots.set(asset, pool.length);
     pool.push(candidate);
     offers.push(candidate);
+  };
+
+  // 搜索期间挂单可能被买走；最终组合输出前按挂单 ID 做一次实时复核。
+  const availabilityCache = new Map();
+  const availabilityState = { checked: 0, unavailable: [], errors: [], skipped: false };
+  const verifySelectedListings = async picks => {
+    const unique = [...new Map(picks.map(p => [listingKey(p), p])).values()];
+    const unavailable = [];
+    // 第一件材料通常最早完成抓取，也最容易在长搜索期间失效；倒序复核，
+    // 让页面最先展示的材料最后一次接触市场，缩短复核到点击之间的窗口。
+    for (const pick of unique.reverse()) {
+      const adapter = pick.market === 'steam' ? steam : buff;
+      if (!adapter?.verifyListing) {
+        availabilityState.skipped = true;
+        continue;
+      }
+      const key = listingKey(pick);
+      let result = availabilityCache.get(key);
+      if (!result) {
+        try {
+          result = await adapter.verifyListing(pick, pick.market === 'steam' ? { cookies } : {});
+        } catch (e) {
+          result = { ok: false, available: null, error: e?.message || String(e) };
+        }
+        availabilityCache.set(key, result);
+        availabilityState.checked++;
+      }
+      if (result.ok && result.available === false) {
+        unavailable.push(pick);
+      } else if (!result.ok || result.available == null) {
+        const detail = result.error ? `：${result.error}` : '';
+        availabilityState.errors.push(`${pick.name || pick.marketHashName || key}${detail}`);
+      }
+    }
+    return unavailable;
   };
 
   const quotaSpecs = plan.collectionSpecs || materialBands;
@@ -412,39 +447,78 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
         (m.errors?.length ? `（${m.errors.join('；')}）` : '')).join('；') +
         (steamLimited ? '。' : '。已按勾选档位搜索，失败项保留断点；可增加所选品质等级后重新搜索。'),
   };
-  onProgress(`候选池 ${pool.length} 笔，按链接中的${plan.collectionSpecs ? '收藏品' : '材料'}固定数量求解 ...`);
-  if (!feasible.reachable) onProgress('目标超出本次候选的磨损上下界，继续用全部真实材料寻找最近近似组合。');
-  onProgress(`保留全部 ${pool.length} 笔真实材料：先选最近磨损组合，再用单件替换与两件补偿降低整组产物误差。`);
-  pool.sort(comparePrices);
-  onWork({ type: 'solver' });
-  const startedSolving = performance.now();
-  const currencies = new Set(pool.map(currencyOf));
-  const comparable = currencies.size === 1 && !currencies.has(null) && pool.every(m => Number.isFinite(m.price));
-  const seed = bestFit?.materials.map(m => pool.findIndex(c => listingKey(c) === listingKey(m)));
-  const optimizerConfig = {
-    count: plan.totalCount, outMin: outRange[0], outMax: outRange[1], targetOut: targetWear,
-    candidateGroups: pool.map(m => m.recipeGroupId), groupCounts: quotas,
-    prices: comparable ? pool.map(m => m.price) : null, maxResults: wants,
-  };
-  const quick = cheapestCombination(pool.map(m => m.norm), { ...optimizerConfig, timeBudgetMs: 0,
-    initialResults: seed?.every(i => i >= 0) ? [{ indices: seed }] : [] });
-  const heuristic = quick.optimization.proven ? quick : solveCombinations(pool.map(m => m.norm), {
+  let optimized = null, optimization = null, solved = null;
+  let availabilityAttempts = 0;
+  while (availabilityAttempts++ < Math.max(2, plan.totalCount + 1)) {
+    feasible = feasibleCandidates(pool, quotas, targetSum, outRange, plan.totalCount);
+    if (feasible.shortage) break;
+    onProgress(`候选池 ${pool.length} 笔，按链接中的${plan.collectionSpecs ? '收藏品' : '材料'}固定数量求解 ...`);
+    if (!feasible.reachable) onProgress('目标超出本次候选的磨损上下界，继续用全部真实材料寻找最近近似组合。');
+    onProgress(`保留全部 ${pool.length} 笔真实材料：先选最近磨损组合，再用单件替换与两件补偿降低整组产物误差。`);
+    pool.sort(comparePrices);
+    onWork({ type: 'solver' });
+    const startedSolving = performance.now();
+    const currencies = new Set(pool.map(currencyOf));
+    const comparable = currencies.size === 1 && !currencies.has(null) && pool.every(m => Number.isFinite(m.price));
+    const seed = bestFit?.materials.map(m => pool.findIndex(c => listingKey(c) === listingKey(m)));
+    // 页面只展示并复核最终最低价组合；保留多组候选会让未复核的替代配方携带已售挂单。
+    const resultLimit = 1;
+    const optimizerConfig = {
       count: plan.totalCount, outMin: outRange[0], outMax: outRange[1], targetOut: targetWear,
       candidateGroups: pool.map(m => m.recipeGroupId), groupCounts: quotas,
-      seedIndices: quick.results[0]?.indices,
-      tries: 30000, maxResults: wants, timeBudgetMs: timeBudgetMs * 0.3,
-  });
-  onProgress('正在验证最低价：按固定配额搜索，以磨损误差优先、同误差价格最低为目标。');
-  const optimized = quick.optimization.proven ? quick : cheapestCombination(pool.map(m => m.norm), {
-    ...optimizerConfig, initialResults: [...quick.results, ...heuristic.results],
-    timeBudgetMs: Math.max(0, timeBudgetMs - (performance.now() - startedSolving)),
-  });
-  const optimization = { ...optimized.optimization, currencyId: comparable ? [...currencies][0] : null,
-    scanComplete: !steamRandomPages && perItem.every(m => !m.errors.length) };
-  onProgress(optimization.proven ? '已证明：本次已抓候选中，同等最小磨损误差下总价最低。'
-    : optimization.comparable ? '已返回当前最低价组合；验证预算用完，尚未证明最低价。' : '存在不同币种或未知价格，未进行统一最低价证明。');
-  const rankedResults = optimized.results;
-  const solved = { results: rankedResults.filter(r => r.score === rankedResults[0]?.score).slice(0, wants) };
+      prices: comparable ? pool.map(m => m.price) : null, maxResults: resultLimit,
+    };
+    const quick = cheapestCombination(pool.map(m => m.norm), { ...optimizerConfig, timeBudgetMs: 0,
+      initialResults: seed?.every(i => i >= 0) ? [{ indices: seed }] : [] });
+    const heuristic = quick.optimization.proven ? quick : solveCombinations(pool.map(m => m.norm), {
+        count: plan.totalCount, outMin: outRange[0], outMax: outRange[1], targetOut: targetWear,
+        candidateGroups: pool.map(m => m.recipeGroupId), groupCounts: quotas,
+        seedIndices: quick.results[0]?.indices,
+        tries: 30000, maxResults: resultLimit, timeBudgetMs: timeBudgetMs * 0.3,
+    });
+    onProgress('正在验证最低价：按固定配额搜索，以磨损误差优先、同误差价格最低为目标。');
+    optimized = quick.optimization.proven ? quick : cheapestCombination(pool.map(m => m.norm), {
+      ...optimizerConfig, initialResults: [...quick.results, ...heuristic.results],
+      timeBudgetMs: Math.max(0, timeBudgetMs - (performance.now() - startedSolving)),
+    });
+    optimization = { ...optimized.optimization, currencyId: comparable ? [...currencies][0] : null,
+      scanComplete: !steamRandomPages && perItem.every(m => !m.errors.length) };
+    onProgress(optimization.proven ? '已证明：本次已抓候选中，同等最小磨损误差下总价最低。'
+      : optimization.comparable ? '已返回当前最低价组合；验证预算用完，尚未证明最低价。' : '存在不同币种或未知价格，未进行统一最低价证明。');
+    const rankedResults = optimized.results;
+    // 只保留求解器排序后的最低价组合（先按磨损误差，再按价格）；这组 10 件
+    // 会全部做实时复核，避免把未复核的备选配方一起返回给用户。
+    solved = { results: rankedResults.slice(0, resultLimit) };
+    const selected = solved.results[0]?.indices.map(i => pool[i]) || [];
+    const unavailable = await verifySelectedListings(selected);
+    if (!unavailable.length) break;
+    // 已确认仍在售的挂单继续复用结果；下一轮只会复核新选中的替代挂单，
+    // 避免因一件挂单失效而把同一组剩余材料重复请求一遍。
+    for (const listing of unavailable) availabilityCache.delete(listingKey(listing));
+    for (const listing of unavailable) availabilityState.unavailable.push(listingKey(listing));
+    const unavailableKeys = new Set(unavailable.map(listingKey));
+    pool = pool.filter(listing => !unavailableKeys.has(listingKey(listing)));
+    onProgress(`复核发现 ${unavailable.length} 件挂单已在搜索期间被购买，已移除并重新寻找替代挂单。`);
+  }
+  if (feasible.shortage) {
+    const shortagesAfterCheck = plan.collectionSpecs
+      ? plan.collectionSpecs.map(group => ({ ...group,
+        available: pool.filter(l => l.recipeGroupId === group.id).length,
+      })).filter(group => group.available < group.count)
+      : perItem.map((m, i) => ({ ...m, available: pool.filter(l => l.recipeMaterialId === materialBands[i].id).length }))
+        .filter(m => m.available < m.required);
+    return {
+      ok: false, error: 'not_enough_recipe_materials', poolSize: pool.length, perItem,
+      resume: resumeInfo(),
+      message: `搜索期间部分挂单已被购买，移除后材料不足：${shortagesAfterCheck
+        .map(m => `「${m.name || m.collection}」需要 ${m.required || m.count} 把，只找到 ${m.available} 把`).join('；')}`,
+      availability: availabilityState,
+    };
+  }
+  if (!solved?.results?.length) return {
+    ok: false, error: 'no_recipe_solution', message: '在指定材料数量和搜索范围内未找到可用组合。',
+    resume: resumeInfo(), availability: availabilityState,
+  };
   const recipes = solved.results.map(result => {
     const picks = result.indices.map(i => pool[i]);
     if (new Set(picks.map(assetKey)).size !== plan.totalCount ||
@@ -486,6 +560,7 @@ export async function huntRecipe(cfg, { buff, signal, onProgress = () => {}, onW
     marketCounts: { buff: pool.filter(m => m.market === 'buff').length, steam: pool.filter(m => m.market === 'steam').length },
     statTrak, perItem, steamItems: usesSteam ? { perItem } : null,
     ieee754: { ...ieee754Info(targetWear), outputTarget: outputTargetInfo(targetWear, plan.totalCount, ...outRange) }, recipes,
+    availability: availabilityState,
     resume: resumeInfo(),
   };
 }

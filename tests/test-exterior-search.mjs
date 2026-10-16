@@ -85,6 +85,7 @@ console.log('✓ 档位边界无重复，取皮肤上下限交集；Steam 总挂
 // 正式 Steam 分页适配器集成：六页库存跨过四页批次，直到 total_count 确认到底。
 const adapter = new SteamMarket({ minIntervalMs: 0 });
 const adapterStarts = [];
+adapter.verifyListing = async () => ({ ok: true, available: true });
 adapter.fetch = async url => {
   const u = new URL(url), start = Number(u.searchParams.get('start') || 0);
   adapterStarts.push(start);

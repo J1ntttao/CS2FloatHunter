@@ -27,6 +27,11 @@ const fixtureFt = parsed.listings.filter(l => l.marketHashName === 'AUG | Snake 
 ok(fixtureResult.listings.length === fixtureFt.length && fixtureResult.listings.every(l =>
   l.marketHashName === 'AUG | Snake Pit (Field-Tested)' && l.floatvalue >= 0.15 && l.floatvalue < 0.38),
   'Steam 适配器排除聚合页中其它档位并对分页重复挂单去重');
+const liveListing = fixtureFt[0];
+const liveCheck = await fixtureMarket.verifyListing(liveListing);
+ok(liveCheck.ok && liveCheck.available === true, 'Steam 最终配方复核可以确认挂单仍在售');
+const missingCheck = await fixtureMarket.verifyListing({ ...liveListing, listingId: 'missing-listing' });
+ok(missingCheck.ok && missingCheck.available === false, 'Steam 最终配方复核可以识别已被买走的挂单');
 ok(!steamListingMatches({ marketHashName: 'X (Factory New)', floatvalue: 0.2226156443 }, 'X (Factory New)'),
   '0.222 磨损不能冒充崭新出厂');
 ok(!steamListingMatches({ floatvalue: 0.22 }, 'X (Field-Tested)'), '缺少真实商品身份的挂单不参与求解');

@@ -9,6 +9,7 @@ import { fetchShareRecipe } from '../src/cs2up/recipe.mjs';
 import { locateCollection } from '../src/cs2up/location.mjs';
 import { materialsInCollection } from '../src/cs2up/materials.mjs';
 import { CollectionHunter } from '../src/market/hunter.mjs';
+import { BuffMarket } from '../src/market/buff.mjs';
 import { f32, normalizeWear, outputWear, recommendedWearFor, solveCombinations } from '../src/tradeup/float.mjs';
 
 const payload = JSON.parse(fs.readFileSync(new URL('../ref/cs2up/sample-payload-099784dbf1e1240d.json', import.meta.url)));
@@ -93,6 +94,49 @@ for (const target of [0.2, 0.7]) {
   }
   console.log(`✓ 仅 Steam 目标 ${target}：只查询指定枪皮，重新计算磨损及外观，固定 6 / 3 / 1，去重与购买定位有效`);
 }
+
+// 求解完成后复核实时库存；第一组中的一笔在搜索期间被买走时，自动换用候选池中的下一笔。
+let soldListing = true;
+let availabilityChecks = 0;
+const availabilityOrder = [];
+const raceSteam = {
+  async listingsWithFloats(name) {
+    const material = plan.materialSpecs.find(m => name.startsWith(m.nameEn + ' ('));
+    return { ok: true, pagesFetched: 1,
+      listings: candidates(material, 0.2).map(l => ({ ...l, marketHashName: name })) };
+  },
+  async verifyListing(listing) {
+    availabilityChecks++;
+    availabilityOrder.push(listing.listingId);
+    if (soldListing && listing.listingId === `${plan.materialSpecs[0].id}:0`) {
+      soldListing = false;
+      return { ok: true, available: false };
+    }
+    return { ok: true, available: true };
+  },
+};
+const raced = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, exteriors: ['ft'], steam: raceSteam }, { timeBudgetMs: 1000 });
+verifyResult(raced, 0.2);
+assert.equal(raced.recipes.length, 1, '只返回一组最低价组合，确保返回的 10 件都经过复核');
+assert.equal(availabilityChecks, 11, '替换一件挂单后只复核新替代项，不重复请求仍在售的 9 件');
+assert.equal(availabilityOrder[9], `${plan.materialSpecs[0].id}:0`, '第一件入炉材料在首轮最后复核，缩短点击前的失效窗口');
+assert.deepEqual(raced.availability.unavailable, [`steam:${plan.materialSpecs[0].id}:0`]);
+assert.ok(raced.recipes.every(r => !r.materials.some(m => m.listingId === `${plan.materialSpecs[0].id}:0`)));
+console.log('✓ 选中挂单搜索期间被买走时，复核会移除并自动换用替代挂单');
+
+const buffCheckMarket = new BuffMarket({ minIntervalMs: 0 });
+const buffCheckPages = [];
+buffCheckMarket.sellOrders = async query => {
+  buffCheckPages.push(query.pageNum);
+  return query.pageNum === 1
+    ? { ok: true, total: 2, totalPage: 2, listings: [{ orderId: 'other', assetId: 'other' }] }
+    : { ok: true, total: 2, totalPage: 2, listings: [{ orderId: 'target', assetId: 'asset-target' }] };
+};
+const buffLiveCheck = await buffCheckMarket.verifyListing({ goodsId: 1, orderId: 'target', assetId: 'asset-target' });
+assert.equal(buffLiveCheck.available, true);
+assert.deepEqual(buffCheckPages, [1, 2]);
+console.log('✓ BUFF 最终配方复核会跨页确认挂单仍在售');
+
 const tooFew = await hunter.huntFromSteam({ recipePlan: plan, targetWear: 0.2, exteriors: ['ft'],
   steam: mockSteam(0.2, { shortage: true }) });
 assert.equal(tooFew.error, 'not_enough_recipe_materials');
@@ -404,6 +448,8 @@ const child = spawn(process.execPath, ['--input-type=module', '-e', `
   CollectionHunter.prototype._materialsInCollection = () => {throw new Error('不能枚举收藏品');};
   SteamMarket.prototype.health = async () => ({ok:true});
   SteamMarket.prototype.priceOverview = () => {throw new Error('双市场不得使用商品最低价');};
+  SteamMarket.prototype.verifyListing = async () => ({ok:true, available:true});
+  BuffMarket.prototype.verifyListing = async () => ({ok:true, available:true});
   SteamMarket.prototype.search = async ({query}) => {
     const s=specs.find(m=>m.name===query);
     return {ok:true,results:[{name:s.nameEn+' (Field-Tested)',localizedName:s.name+' (久经沙场)'}]};

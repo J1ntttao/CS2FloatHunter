@@ -356,6 +356,10 @@ powershell -File scripts\set-cookies.ps1 -Site buff
 脚本会读剪贴板、解析、写入 `data/cookies.manual.buff.json`。
 也支持 `-String "session=...; csrf_token=..."` 或 `-FromFile cookies.txt`。
 
+`data/`（登录态、凭据、搜索记录）、`.cache/`（可能包含 Chrome Cookie 数据库副本）、`out/`、Cookie 导出文件及 `.env` 本地配置均由 `.gitignore` 排除。环境配置示例可使用 `.env.example` 或 `.env.sample`，只填写占位值。
+
+已被 Git 跟踪的文件需要用 `git rm --cached -- <文件路径>` 移出索引，本地文件仍会保留。忽略规则和移出索引都不会清除旧提交中的内容；若真实 Cookie 或令牌曾被提交，应使对应登录态失效并重新录入，清理历史需要单独处理。
+
 ### 2. 自检
 
 ```powershell

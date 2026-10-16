@@ -1,11 +1,23 @@
-# 登录态（含 session token，绝不能提交）
-data/cookies*.json
-data/*credentials*.json
+# 本地登录态、个人搜索记录和缓存（不得提交）
+/data/
+/.cache/
 
-# 运行产物
-data/last-pool.json
-data/search-results/
-data/buff-catalog/
-out/
+# 手工导出的 Cookie / 凭据（包括放在 data 目录之外的文件）
+cookies*.json
+cookies*.txt
+*credentials*.json
+
+# 本地环境配置；无真实凭据的示例文件可以提交
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# 运行产物及日志
+/out/
+*.log
 
 node_modules/
+
+# 本机工具配置
+.claude/settings.local.json
